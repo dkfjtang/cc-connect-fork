@@ -64,6 +64,16 @@ TaskCardController
 
 日志只记录 `appId`、事件类型、`message_id`、`chat_id`、`chat_type` 和错误摘要；不记录 `appSecret`、verification token、encrypt key、消息正文或完整事件 payload。
 
+## 卡片更新重试
+
+`TaskCardController` 会串行化同一卡片的 send / update，并对可重试错误做有限重试。
+
+当前策略：
+
+- 飞书限频错误 `99991663` 使用更长的指数退避，默认从 1000ms 开始。
+- 无明确飞书错误码的 transport / 网络异常沿用普通短退避。
+- 带明确飞书业务错误码且非限频的错误不重试，避免无效 payload 或权限错误反复打 API。
+
 ## 发送卡片
 
 输入 action：

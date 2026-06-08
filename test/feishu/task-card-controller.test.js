@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { RuntimeTask } from "../../src/runtime/runtime-task.js";
+import { FeishuApiError } from "../../src/feishu/message-client.js";
 import { TaskCardController } from "../../src/feishu/task-card-controller.js";
 
 test("sync sends a new card and attaches returned card message id", async () => {
@@ -92,6 +93,67 @@ test("sync retries transient sender failures", async () => {
   assert.equal(actions[0].type, "send");
   assert.equal(actions[1].type, "send");
   assert.equal(task.snapshot().cardMessageId, "om_123");
+});
+
+test("sync uses longer exponential backoff for Feishu rate limits", async () => {
+  const task = new RuntimeTask({
+    taskId: "task_123",
+    feishuChatId: "oc_123",
+    cwd: "F:\\development\\f-codex",
+  });
+  const delays = [];
+  let attempts = 0;
+  const controller = new TaskCardController({
+    maxSendAttempts: 3,
+    retryDelayMs: 100,
+    rateLimitRetryDelayMs: 1000,
+    setTimeoutFn: (callback, delay) => {
+      delays.push(delay);
+      callback();
+      return "timer";
+    },
+    sendAction: async () => {
+      attempts += 1;
+      if (attempts < 3) {
+        throw new FeishuApiError({
+          actionType: "update",
+          code: 99991663,
+          message: "frequency limited",
+        });
+      }
+
+      return { messageId: "om_123" };
+    },
+  });
+
+  await controller.sync(task);
+
+  assert.equal(attempts, 3);
+  assert.deepEqual(delays, [1000, 2000]);
+});
+
+test("sync does not retry non-retryable Feishu API errors", async () => {
+  const task = new RuntimeTask({
+    taskId: "task_123",
+    feishuChatId: "oc_123",
+    cwd: "F:\\development\\f-codex",
+  });
+  let attempts = 0;
+  const controller = new TaskCardController({
+    maxSendAttempts: 3,
+    retryDelayMs: 0,
+    sendAction: async () => {
+      attempts += 1;
+      throw new FeishuApiError({
+        actionType: "send",
+        code: 230001,
+        message: "invalid card payload",
+      });
+    },
+  });
+
+  await assert.rejects(() => controller.sync(task), /invalid card payload/);
+  assert.equal(attempts, 1);
 });
 
 test("sync serializes concurrent card updates so later sync sees attached card", async () => {

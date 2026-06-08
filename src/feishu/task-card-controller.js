@@ -4,6 +4,7 @@ export class TaskCardController {
   #sendAction;
   #maxSendAttempts;
   #retryDelayMs;
+  #rateLimitRetryDelayMs;
   #setTimeout;
   #syncQueue = Promise.resolve();
 
@@ -11,6 +12,7 @@ export class TaskCardController {
     sendAction,
     maxSendAttempts = 2,
     retryDelayMs = 300,
+    rateLimitRetryDelayMs = 1000,
     setTimeoutFn = (callback, delay) => setTimeout(callback, delay),
   }) {
     if (typeof sendAction !== "function") {
@@ -23,6 +25,7 @@ export class TaskCardController {
     this.#sendAction = sendAction;
     this.#maxSendAttempts = maxSendAttempts;
     this.#retryDelayMs = retryDelayMs;
+    this.#rateLimitRetryDelayMs = rateLimitRetryDelayMs;
     this.#setTimeout = setTimeoutFn;
   }
 
@@ -50,23 +53,50 @@ export class TaskCardController {
         return await this.#sendAction(action);
       } catch (error) {
         lastError = error;
-        if (attempt === this.#maxSendAttempts) {
+        if (attempt === this.#maxSendAttempts || !isRetryableError(error)) {
           break;
         }
-        await this.#delay();
+        await this.#delay(retryDelayFor(error, attempt, {
+          retryDelayMs: this.#retryDelayMs,
+          rateLimitRetryDelayMs: this.#rateLimitRetryDelayMs,
+        }));
       }
     }
 
     throw lastError;
   }
 
-  #delay() {
-    if (this.#retryDelayMs <= 0) {
+  #delay(delayMs) {
+    if (delayMs <= 0) {
       return Promise.resolve();
     }
 
     return new Promise((resolve) => {
-      this.#setTimeout(resolve, this.#retryDelayMs);
+      this.#setTimeout(resolve, delayMs);
     });
   }
+}
+
+function isRetryableError(error) {
+  if (error?.name !== "FeishuApiError") {
+    return true;
+  }
+
+  if (isRateLimitError(error)) {
+    return true;
+  }
+
+  return error.code === null || error.code === undefined;
+}
+
+function retryDelayFor(error, attempt, { retryDelayMs, rateLimitRetryDelayMs }) {
+  if (isRateLimitError(error)) {
+    return rateLimitRetryDelayMs * 2 ** (attempt - 1);
+  }
+
+  return retryDelayMs;
+}
+
+function isRateLimitError(error) {
+  return error?.code === 99991663;
 }
