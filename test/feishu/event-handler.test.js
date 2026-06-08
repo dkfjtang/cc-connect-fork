@@ -46,6 +46,7 @@ test("handleMessageReceive logs handled message gate result without message cont
       handleTextMessage: async () => ({ snapshot: () => ({ status: "completed" }) }),
     },
     logger: fakeLogger(logEntries),
+    now: steppingClock(1000, 123),
   });
 
   await handler.handleMessageReceive({
@@ -68,6 +69,7 @@ test("handleMessageReceive logs handled message gate result without message cont
     chatId: "oc_123",
     chatType: "p2p",
     resultStatus: "handled",
+    durationMs: 123,
     taskStatus: "completed",
   });
   assert.equal(JSON.stringify(logEntries).includes("secret user task"), false);
@@ -108,6 +110,7 @@ test("handleMessageReceive logs skipped message gate result without raw content"
       },
     },
     logger: fakeLogger(logEntries),
+    now: steppingClock(2000, 75),
   });
 
   await handler.handleMessageReceive({
@@ -130,6 +133,7 @@ test("handleMessageReceive logs skipped message gate result without raw content"
     chatId: "oc_123",
     chatType: "group",
     resultStatus: "skipped",
+    durationMs: 75,
     reason: "Only text messages are supported",
   });
   assert.equal(JSON.stringify(logEntries).includes("file_secret"), false);
@@ -853,5 +857,14 @@ function fakeLogger(entries) {
   return {
     info: (event, fields) => entries.push({ level: "info", event, ...fields }),
     error: (event, fields) => entries.push({ level: "error", event, ...fields }),
+  };
+}
+
+function steppingClock(initialValue, stepMs) {
+  let current = initialValue;
+  return () => {
+    const value = current;
+    current += stepMs;
+    return value;
   };
 }

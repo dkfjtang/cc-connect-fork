@@ -119,7 +119,7 @@ Done 标准：
 - `BridgeRuntime` 已输出 `task.received`、`task.thread_created` / `task.thread_reused`、`task.turn_started`、`task.completed` / `task.failed` / `task.cancelled` 等结构化事件。
 - `runDev` 已按 `FCA_LOG_LEVEL` 创建 JSONL logger，并写入 stderr，便于容器或本机进程采集；同一个 logger 已贯穿飞书 SDK transport 和 runtime。
 - `FeishuSdkTransport` 已记录 WebSocket 启动阶段、事件收到和 handler 失败日志，字段不包含 app secret、消息正文或完整事件 payload。
-- `FeishuEventHandler` 已记录 `feishu.message_handled` / `feishu.message_skipped` gate 结果，字段只包含 message/chat 维度、result status、task status 或跳过原因，不记录消息正文、附件 key、文件名或完整 payload。
+- `FeishuEventHandler` 已记录 `feishu.message_handled` / `feishu.message_skipped` gate 结果和处理耗时，字段只包含 message/chat 维度、result status、duration、task status 或跳过原因，不记录消息正文、附件 key、文件名或完整 payload。
 - `FeishuMessageClient` 已将飞书 API `code/msg` 和 transport 异常归一为 `FeishuApiError`，结构化日志会记录 `errorName`、`errorCode` 和 `errorActionType`。
 - `TaskCardController` 已串行化同一卡片的 send / update，避免运行中 patch 与最终态 patch 并发乱序。
 - `TaskCardController` 已对卡片 send / update 做有限重试和错误分类退避：限频错误指数退避，非重试业务错误快速失败；超过重试次数后仍向上抛出，交给 runtime 结构化日志记录。

@@ -48,8 +48,11 @@ export class FeishuEventHandler {
   }
 
   async handleMessageReceive(payload) {
+    const startedAt = this.#now();
     const result = await this.#handleMessageReceive(payload);
-    this.#logMessageResult(payload, result);
+    this.#logMessageResult(payload, result, {
+      durationMs: Math.max(0, this.#now() - startedAt),
+    });
     return result;
   }
 
@@ -254,12 +257,13 @@ export class FeishuEventHandler {
     return allowedOpenIds.has(action.openId);
   }
 
-  #logMessageResult(payload, result) {
+  #logMessageResult(payload, result, { durationMs }) {
     const event = result?.status === "skipped" ? "feishu.message_skipped" : "feishu.message_handled";
     const write = this.#logger.info ?? (() => {});
     const fields = {
       ...messageLogFields(payload),
       resultStatus: result?.status ?? "unknown",
+      durationMs,
     };
     if (result?.taskStatus) {
       fields.taskStatus = result.taskStatus;

@@ -59,7 +59,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | 更新节流 | 流式内容低频刷新卡片 | 已支持 Codex delta 运行中节流更新和 card update 互斥 flush |
 | 取消快路径 | 用户发送停止文本时快速中断当前任务 | 已支持取消文本识别、cancelled 卡片和 `turn/interrupt` |
 | 状态查询快路径 | 用户查询当前任务时刷新已有卡片，不打断长任务 | 已支持状态文本识别，并绕过同 chat 队列刷新 active task 卡片 |
-| 长连接可观测性 | WebSocket 启动、入站事件、gate 后分发和 dispatch 失败进入日志 | 已记录 WS 启动阶段、事件收到、message handled/skipped 和 handler 失败的 JSONL 日志 |
+| 长连接可观测性 | WebSocket 启动、入站事件、gate 后分发耗时和 dispatch 失败进入日志 | 已记录 WS 启动阶段、事件收到、message handled/skipped 耗时和 handler 失败的 JSONL 日志 |
 | 长驻进程退出治理 | 收到进程退出信号时释放 listener / 子进程资源 | 已注册 `SIGINT` / `SIGTERM`，按 app-server、transport 顺序 best-effort 停止并记录 JSONL 日志 |
 | 审批按钮权限 | 交互卡片操作也要受账号和群策略约束 | 已要求审批操作者命中全局 `open_id` 白名单；配置群 sender allowlist 时，按钮操作者也必须命中该群策略 |
 
@@ -121,7 +121,7 @@ fca 映射：
 - `runDev` 将同一个 JSONL logger 注入 transport 和 runtime，保证飞书连接、入站事件、Codex task 日志在同一日志流里关联。
 - 新增 `feishu.ws_starting`、`feishu.ws_dispatcher_created`、`feishu.ws_handlers_registered`、`feishu.ws_client_created`、`feishu.ws_started`、`feishu.ws_start_failed`、`feishu.ws_cleanup_failed`、`feishu.ws_stopped` 和 `feishu.ws_stop_failed`。
 - 新增 `feishu.event_received` 和 `feishu.event_handler_failed`，只记录 `appId`、event type、`message_id`、`chat_id`、`chat_type` 和错误摘要。
-- 新增 `feishu.message_handled` 和 `feishu.message_skipped`，记录消息 gate 结果、跳过原因和任务状态，不记录消息正文、附件 key、文件名或完整 payload。
+- 新增 `feishu.message_handled` 和 `feishu.message_skipped`，记录消息 gate 结果、处理耗时、跳过原因和任务状态，不记录消息正文、附件 key、文件名或完整 payload。
 
 差异理由：
 
