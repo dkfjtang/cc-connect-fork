@@ -122,6 +122,28 @@ export class FeishuSdkTransport {
     };
   }
 
+  async updateCardKitElementContent({ cardId, elementId, sequence, content }) {
+    const client = await this.#client();
+    const response = await client.cardkit.v1.cardElement.content({
+      path: {
+        card_id: cardId,
+        element_id: elementId,
+      },
+      data: {
+        content,
+        sequence,
+      },
+    });
+
+    return {
+      ...response,
+      data: {
+        ...(response?.data ?? {}),
+        sequence,
+      },
+    };
+  }
+
   async probeBot() {
     const client = await this.#client();
     try {

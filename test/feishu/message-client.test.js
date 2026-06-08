@@ -227,6 +227,116 @@ test("sendAction can update CardKit card metadata", async () => {
   });
 });
 
+test("sendAction updates CardKit body content before full card update", async () => {
+  const calls = [];
+  const client = new FeishuMessageClient({
+    transport: {
+      updateCardKitElementContent: async (payload) => {
+        calls.push({ method: "updateCardKitElementContent", payload });
+        return { data: { sequence: 4 } };
+      },
+      updateCardKitCard: async () => {
+        throw new Error("should not use full update");
+      },
+      patchMessageCard: async () => {
+        throw new Error("should not use IM fallback");
+      },
+    },
+  });
+
+  const result = await client.sendAction({
+    type: "update",
+    messageId: "om_123",
+    cardChannel: "cardkit",
+    cardId: "card_123",
+    cardSequence: 3,
+    card: {
+      elements: [
+        {
+          tag: "markdown",
+          text: { tag: "lark_md", content: "流式正文更新" },
+        },
+      ],
+    },
+  });
+
+  assert.deepEqual(calls, [
+    {
+      method: "updateCardKitElementContent",
+      payload: {
+        cardId: "card_123",
+        elementId: "fca_body",
+        sequence: 4,
+        content: "流式正文更新",
+      },
+    },
+  ]);
+  assert.deepEqual(result, {
+    cardChannel: "cardkit",
+    cardId: "card_123",
+    cardSequence: 4,
+  });
+});
+
+test("sendAction falls back to CardKit full update when body content update fails", async () => {
+  const calls = [];
+  const logEntries = [];
+  const client = new FeishuMessageClient({
+    logger: fakeLogger(logEntries),
+    transport: {
+      updateCardKitElementContent: async (payload) => {
+        calls.push({ method: "updateCardKitElementContent", payload });
+        throw new Error("content update failed");
+      },
+      updateCardKitCard: async (payload) => {
+        calls.push({ method: "updateCardKitCard", payload });
+        return { data: { sequence: 4 } };
+      },
+      patchMessageCard: async () => {
+        throw new Error("should not use IM fallback");
+      },
+    },
+  });
+
+  const result = await client.sendAction({
+    type: "update",
+    messageId: "om_123",
+    cardChannel: "cardkit",
+    cardId: "card_123",
+    cardSequence: 3,
+    card: {
+      elements: [
+        {
+          tag: "markdown",
+          text: { tag: "lark_md", content: "secret body should not be logged" },
+        },
+      ],
+    },
+  });
+
+  assert.equal(calls[0].method, "updateCardKitElementContent");
+  assert.equal(calls[1].method, "updateCardKitCard");
+  assert.deepEqual(result, {
+    cardChannel: "cardkit",
+    cardId: "card_123",
+    cardSequence: 4,
+  });
+  assert.deepEqual(logEntries, [
+    {
+      level: "warn",
+      event: "feishu.cardkit_fallback",
+      actionType: "update",
+      reason: "cardkit_content_update_failed",
+      messageId: "om_123",
+      cardId: "card_123",
+      elementId: "fca_body",
+      errorSummary: "Feishu update failed: content update failed",
+      errorName: "FeishuApiError",
+    },
+  ]);
+  assert.equal(JSON.stringify(logEntries).includes("secret body"), false);
+});
+
 test("sendAction falls back to IM patch when CardKit update fails", async () => {
   const calls = [];
   const logEntries = [];

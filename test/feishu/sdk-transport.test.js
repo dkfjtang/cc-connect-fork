@@ -238,6 +238,47 @@ test("updateCardKitCard calls Feishu SDK CardKit full update with next sequence"
   assert.deepEqual(result, { data: { sequence: 4 } });
 });
 
+test("updateCardKitElementContent calls Feishu SDK CardKit content update", async () => {
+  const calls = [];
+  const transport = new FeishuSdkTransport({
+    appId: "cli_123",
+    appSecret: "secret",
+    createClient: () => ({
+      cardkit: {
+        v1: {
+          cardElement: {
+            content: async (payload) => {
+              calls.push(payload);
+              return { data: {} };
+            },
+          },
+        },
+      },
+    }),
+  });
+
+  const result = await transport.updateCardKitElementContent({
+    cardId: "card_123",
+    elementId: "fca_body",
+    sequence: 4,
+    content: "流式正文更新",
+  });
+
+  assert.deepEqual(calls, [
+    {
+      path: {
+        card_id: "card_123",
+        element_id: "fca_body",
+      },
+      data: {
+        content: "流式正文更新",
+        sequence: 4,
+      },
+    },
+  ]);
+  assert.deepEqual(result, { data: { sequence: 4 } });
+});
+
 test("sendCardKitMessage preserves existing CardKit element ids", async () => {
   const calls = [];
   const transport = new FeishuSdkTransport({

@@ -55,6 +55,14 @@ TaskCardController
     card,
   }) => ({ data: { sequence } }),
 
+  // Optional. Updates the stable body markdown element with CardKit typewriter effect.
+  updateCardKitElementContent: async ({
+    cardId,
+    elementId,
+    sequence,
+    content,
+  }) => ({ data: { sequence } }),
+
   startMessageListener: async ({
     onMessageReceive,
     onCardAction,
@@ -192,7 +200,7 @@ transport payload：
 { cardChannel: "im" }
 ```
 
-如果 action 带有 `cardChannel=cardkit`、`cardId`，且 transport 提供 `updateCardKitCard`，会先尝试 CardKit update，并用 `cardSequence + 1` 作为下一次更新序号。CardKit send / update 方法缺失或失败时，会记录 `feishu.cardkit_fallback`，回退到 `sendMessage` / `patchMessageCard`；update 回退还会把 task 中保存的 `cardChannel` 降级为 `im`，避免后续继续依赖不可用的 CardKit 通道。
+如果 action 带有 `cardChannel=cardkit`、`cardId`，且 transport 提供 CardKit 更新方法，会先尝试 `updateCardKitElementContent` 更新稳定正文元素 `fca_body`，以使用 CardKit 的打字机效果；正文局部更新不可用或失败时，继续尝试 `updateCardKitCard` 全量更新，并用 `cardSequence + 1` 作为下一次更新序号。CardKit send / update 方法缺失或失败时，会记录 `feishu.cardkit_fallback`，回退到 `sendMessage` / `patchMessageCard`；update 回退还会把 task 中保存的 `cardChannel` 降级为 `im`，避免后续继续依赖不可用的 CardKit 通道。
 
 ## CardKit element id
 
@@ -204,9 +212,9 @@ CardKit 转换层会为 legacy IM card 元素补稳定 `element_id`：
 - 分隔线：`fca_divider`
 - footer note：`fca_footer`
 
-已有 `element_id` 不会被覆盖。这些 id 用于后续接入局部更新或 element content 流式更新。
+已有 `element_id` 不会被覆盖。当前 CardKit update 会优先使用 `fca_body` 做 element content 局部更新；其它元素仍走全量卡片更新。
 
 ## 后续接入点
 
-- 继续评估 CardKit 局部更新和流式 element content 更新。
+- 继续评估 footer / action 等非正文元素的 CardKit 局部更新。
 - 增加长连接断线和重连策略评估。

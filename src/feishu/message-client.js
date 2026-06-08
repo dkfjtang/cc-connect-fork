@@ -108,6 +108,11 @@ export class FeishuMessageClient {
       typeof this.#transport.updateCardKitCard === "function"
     ) {
       try {
+        const contentResult = await this.#updateCardKitBodyContent(action);
+        if (contentResult) {
+          return contentResult;
+        }
+
         const response = await callFeishuAction("update", () =>
           this.#transport.updateCardKitCard({
             cardId: action.cardId,
@@ -151,6 +156,42 @@ export class FeishuMessageClient {
       cardId: null,
       cardSequence: null,
     };
+  }
+
+  async #updateCardKitBodyContent(action) {
+    if (typeof this.#transport.updateCardKitElementContent !== "function") {
+      return null;
+    }
+    const content = cardBodyContent(action.card);
+    if (!content) {
+      return null;
+    }
+
+    try {
+      const sequence = nextSequence(action.cardSequence);
+      const response = await callFeishuAction("update", () =>
+        this.#transport.updateCardKitElementContent({
+          cardId: action.cardId,
+          elementId: "fca_body",
+          sequence,
+          content,
+        }),
+      );
+
+      return {
+        cardChannel: "cardkit",
+        cardId: action.cardId,
+        cardSequence: normalizeSequence(response?.data?.sequence, sequence),
+      };
+    } catch (error) {
+      this.#logCardKitFallback("update", "cardkit_content_update_failed", {
+        messageId: action.messageId,
+        cardId: action.cardId,
+        elementId: "fca_body",
+        ...errorLogFields(error),
+      });
+      return null;
+    }
   }
 
   #logCardKitFallback(actionType, reason, fields = {}) {
@@ -204,6 +245,11 @@ function nextSequence(value) {
 function normalizeSequence(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function cardBodyContent(card) {
+  const bodyElement = card?.elements?.find((element) => element?.tag === "markdown");
+  return bodyElement?.text?.content ?? null;
 }
 
 function errorLogFields(error) {

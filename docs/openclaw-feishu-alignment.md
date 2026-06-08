@@ -87,7 +87,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | P0 | 卡片 footer 的状态、会话和排障字段 | 已展示 status / thread / turn / elapsed / token / cache / context / model / fca version / error type / cwd，并支持字段可配置 |
 | P1 | 群聊 @、群配置和发送者策略 | 已实现 @ 触发、可选群 `chat_id` allowlist、群级 JSON 配置文件、全局发送者 `open_id` 白名单、群内 sender 收紧策略和群级 developer instructions |
 | P1 | 敏感操作确认卡片 | 已映射到 Codex approval server request，展示风险等级、固定枚举风险因素和脱敏范围摘要，并支持同一卡片展开详情；不复用 OpenClaw tool approval 内核 |
-| P1 | CardKit 2.0 与普通卡片降级 | 已补 CardKit 优先、IM fallback 的配置开关、卡片身份元数据、稳定 element id、message client 降级链路和 SDK transport CardKit create/update |
+| P1 | CardKit 2.0 与普通卡片降级 | 已补 CardKit 优先、IM fallback 的配置开关、卡片身份元数据、稳定 element id、正文 element content 局部更新、message client 降级链路和 SDK transport CardKit create/update |
 
 ## 事件入口对齐
 
@@ -154,7 +154,7 @@ fca 的目标：
 
 - 默认：普通 IM 卡片 send + patch，running / completed / failed 三态稳定。
 - 已增加运行中更新节流、同一卡片互斥 flush、发送/更新错误分类退避、卡片 payload 尺寸保护、per-chat queue 和飞书 API 错误归一化。
-- 已增加 `FCA_CARD_CHANNEL=cardkit` 配置、卡片 channel / card id / sequence 元数据流转、SDK CardKit create/update、稳定 element id、CardKit send/update 优先调用、`feishu.cardkit_fallback` 脱敏日志和 IM fallback；默认仍保持 IM。
+- 已增加 `FCA_CARD_CHANNEL=cardkit` 配置、卡片 channel / card id / sequence 元数据流转、SDK CardKit create/update、稳定 element id、正文 element content 局部更新、CardKit send/update 优先调用、`feishu.cardkit_fallback` 脱敏日志和 IM fallback；默认仍保持 IM。
 - footer 字段可配置化已由 `FCA_CARD_FOOTER_FIELDS` 支持。
 
 ## 不对齐项
