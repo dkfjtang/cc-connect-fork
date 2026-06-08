@@ -245,4 +245,5 @@ CardKit 转换层会为 legacy IM card 元素补稳定 `element_id`：
 ## 后续接入点
 
 - 继续评估 footer / action 等非正文元素的 CardKit 局部更新。
+- 附件下载 adapter 契约已存在于事件处理层，用于后续把审批后的文件/图片输入接入 SDK transport；当前 SDK transport 尚未实现真实下载方法，默认 adapter 返回 disabled，不调用飞书资源下载 API、不写入本地文件。
 - 继续评估是否需要在 SDK 自动重连之外增加进程级健康探测。

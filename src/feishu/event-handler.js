@@ -8,6 +8,10 @@ import {
   UnsupportedFeishuCardActionError,
 } from "./card-action-parser.js";
 import {
+  createDisabledAttachmentDownloadAdapter,
+  prepareAttachmentDownloadRequest,
+} from "./attachment-download-adapter.js";
+import {
   buildAttachmentApprovalSummary,
   buildAttachmentPendingApproval,
   decideAttachmentInput,
@@ -24,6 +28,7 @@ export class FeishuEventHandler {
   #messageDedupStore;
   #unsupportedMessageClient;
   #feishuFileInputsEnabled;
+  #attachmentDownloadAdapter;
   #logger;
   #seenMessageIds = new Set();
   #chatQueues = new Map();
@@ -39,6 +44,7 @@ export class FeishuEventHandler {
     messageDedupStore = null,
     unsupportedMessageClient = null,
     feishuFileInputsEnabled = false,
+    attachmentDownloadAdapter = createDisabledAttachmentDownloadAdapter(),
     logger = null,
   }) {
     this.#runtime = runtime;
@@ -51,6 +57,7 @@ export class FeishuEventHandler {
     this.#messageDedupStore = messageDedupStore;
     this.#unsupportedMessageClient = unsupportedMessageClient;
     this.#feishuFileInputsEnabled = feishuFileInputsEnabled;
+    this.#attachmentDownloadAdapter = attachmentDownloadAdapter;
     this.#logger = logger ?? {
       info: () => {},
     };
@@ -188,6 +195,12 @@ export class FeishuEventHandler {
       decision.action === "eligible" ? buildAttachmentApprovalSummary(envelope, decision) : null;
     const pendingApproval =
       decision.action === "eligible" ? buildAttachmentPendingApproval(envelope, decision) : null;
+    const downloadRequest = pendingApproval
+      ? prepareAttachmentDownloadRequest(envelope, pendingApproval)
+      : null;
+    const downloadResult = downloadRequest
+      ? await this.#attachmentDownloadAdapter.downloadAttachment(downloadRequest)
+      : null;
     const messageId = envelope.messageId;
     if (decision.action === "skip") {
       return {
@@ -226,6 +239,9 @@ export class FeishuEventHandler {
     }
     if (pendingApproval) {
       result.attachmentPendingApproval = pendingApproval;
+    }
+    if (downloadResult) {
+      result.attachmentDownload = downloadResult;
     }
     return result;
   }
@@ -352,6 +368,10 @@ export class FeishuEventHandler {
     }
     if (result?.attachmentPendingApproval?.logFields) {
       Object.assign(fields, result.attachmentPendingApproval.logFields);
+    }
+    if (result?.attachmentDownload) {
+      fields.attachmentDownloadStatus = result.attachmentDownload.status;
+      fields.attachmentDownloadReason = result.attachmentDownload.reason;
     }
     write(event, fields);
   }

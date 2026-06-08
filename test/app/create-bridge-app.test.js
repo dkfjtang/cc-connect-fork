@@ -220,6 +220,7 @@ test("createBridgeApp passes file input feature flag to event handler", async ()
       ],
     },
     attachmentPendingApproval: result.attachmentPendingApproval,
+    attachmentDownload: result.attachmentDownload,
   });
   assert.equal(result.attachmentPendingApproval.requestId, "attachment-request-om_file_");
   assert.equal(result.attachmentPendingApproval.approvalId, "attachment-om_file_");
@@ -228,6 +229,12 @@ test("createBridgeApp passes file input feature flag to event handler", async ()
     "approval:attachment-om_file_",
     "item:attachment-item-om_file_",
   ]);
+  assert.deepEqual(result.attachmentDownload, {
+    status: "disabled",
+    reason: "Feishu attachment download adapter is not configured",
+    attachmentKind: "file",
+    approvalId: "attachment-om_file_",
+  });
   assert.equal(messages.length, 1);
   assert.equal(JSON.stringify(messages).includes("file_secret"), false);
   assert.equal(JSON.stringify(messages).includes("secret.txt"), false);

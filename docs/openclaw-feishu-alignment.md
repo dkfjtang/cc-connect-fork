@@ -74,7 +74,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | P1 | CardKit 优先、IM patch fallback | 已支持 `FCA_CARD_CHANNEL=cardkit`、SDK CardKit create/update、CardKit 优先和 IM fallback；默认仍保持 IM |
 | P1 | 群聊策略 | 已完成群聊 @ 最小入口、可选群 `chat_id` allowlist、群内 sender 收紧策略和群级 developer instructions |
 | P1 | 卡片交互审批 | 已完成 Codex approval server request 识别、等待审批卡片、详情展开、飞书按钮回调和超时默认安全拒绝 |
-| P2 | 文件/图片资源 | 私聊非文本消息已返回固定暂不支持提示且不下载附件；已补 `FCA_FEISHU_FILE_INPUTS_ENABLED` 显式门禁并默认关闭，后续作为 Codex 输入附件和输出附件能力规划 |
+| P2 | 文件/图片资源 | 私聊非文本消息已返回固定暂不支持提示且不下载附件；已补 `FCA_FEISHU_FILE_INPUTS_ENABLED` 显式门禁并默认关闭；已增加附件下载 adapter 脱敏契约和默认 disabled 实现，后续作为 Codex 输入附件和输出附件能力规划 |
 | P2 | 文档/多维表/日历/任务工具 | 不属于 fca MVP；只在 Codex 能力需要飞书工具时评估 |
 
 ## 源码对齐待办
@@ -130,6 +130,7 @@ fca 映射：
 - 附件下载审批摘要已先收敛为 Codex 风格的脱敏风险信息；后续可映射到现有 approval card，但当前不触发审批按钮或下载动作。
 - 附件审批摘要已验证可渲染为现有 waiting approval 卡片模型，复用当前卡片结构和按钮 value 形状；后续接入前仍需要真实 pending approval 映射和下载执行器。
 - 附件 pending approval 骨架已生成脱敏 request / approval / item id、keys 和日志字段；当前不写入运行时 pending map，避免按钮误回调后触发不存在的下载流程。
+- 附件下载 adapter 骨架已定义事件层到下载执行器之间的脱敏请求契约，并提供默认 disabled adapter；这一步只对齐 OpenClaw 文件/图片下载能力的接入点，不复用 OpenClaw 下载源码，也不调用真实飞书下载 API。
 
 差异理由：
 

@@ -319,6 +319,12 @@ test("handleMessageReceive keeps enabled attachments behind unfinished download 
         attachmentApprovalRiskReasons: ["飞书附件读取"],
       },
     },
+    attachmentDownload: {
+      status: "disabled",
+      reason: "Feishu attachment download adapter is not configured",
+      attachmentKind: "file",
+      approvalId: "attachment-om_enabl",
+    },
   });
   assert.deepEqual(notices, [
     {
@@ -331,6 +337,65 @@ test("handleMessageReceive keeps enabled attachments behind unfinished download 
   assert.equal(JSON.stringify(result).includes("file_secret"), false);
   assert.equal(JSON.stringify(result).includes("secret.txt"), false);
   assert.equal(JSON.stringify(result).includes("om_enabled_file"), false);
+});
+
+test("handleMessageReceive passes sanitized request to attachment download adapter", async () => {
+  const downloadRequests = [];
+  const handler = new FeishuEventHandler({
+    runtime: {
+      handleTextMessage: async () => {
+        throw new Error("should not start Codex turn for attachment download");
+      },
+    },
+    unsupportedMessageClient: {
+      sendTextMessage: async () => ({ messageId: "om_notice" }),
+    },
+    feishuFileInputsEnabled: true,
+    attachmentDownloadAdapter: {
+      downloadAttachment: async (request) => {
+        downloadRequests.push(request);
+        return {
+          status: "mocked",
+          reason: "download adapter contract exercised",
+          attachmentKind: request.attachmentKind,
+          approvalId: request.approvalId,
+        };
+      },
+    },
+  });
+
+  const result = await handler.handleMessageReceive({
+    event: {
+      sender: { sender_id: { open_id: "ou_123" } },
+      message: {
+        message_id: "om_download_file",
+        chat_id: "oc_123",
+        chat_type: "p2p",
+        message_type: "file",
+        content: JSON.stringify({ file_key: "file_secret", file_name: "secret.txt" }),
+      },
+    },
+  });
+
+  assert.deepEqual(downloadRequests, [
+    {
+      attachmentKind: "file",
+      messageId: "om_download_file",
+      chatId: "oc_123",
+      chatType: "p2p",
+      approvalId: "attachment-om_downl",
+      requestId: "attachment-request-om_downl",
+      itemId: "attachment-item-om_downl",
+    },
+  ]);
+  assert.deepEqual(result.attachmentDownload, {
+    status: "mocked",
+    reason: "download adapter contract exercised",
+    attachmentKind: "file",
+    approvalId: "attachment-om_downl",
+  });
+  assert.equal(JSON.stringify(downloadRequests).includes("file_secret"), false);
+  assert.equal(JSON.stringify(downloadRequests).includes("secret.txt"), false);
 });
 
 test("handleMessageReceive logs enabled attachment approval summary without raw details", async () => {
@@ -378,6 +443,8 @@ test("handleMessageReceive logs enabled attachment approval summary without raw 
     attachmentApprovalRequestId: "attachment-request-om_enabl",
     attachmentApprovalId: "attachment-om_enabl",
     attachmentApprovalItemId: "attachment-item-om_enabl",
+    attachmentDownloadStatus: "disabled",
+    attachmentDownloadReason: "Feishu attachment download adapter is not configured",
   });
   assert.equal(JSON.stringify(logEntries).includes("image_secret"), false);
   assert.equal(JSON.stringify(logEntries).includes("secret.png"), false);
