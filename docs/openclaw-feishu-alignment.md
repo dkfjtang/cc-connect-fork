@@ -79,7 +79,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | --- | --- | --- |
 | P0 | 长连接启动、重连、事件分发和错误日志 | 已接入 SDK 长连接；继续补结构化日志和连接状态可观测性 |
 | P0 | 消息事件去重、回放过滤、自回声过滤 | 已实现基础护栏和持久化去重窗口，避免进程重启后重复处理 |
-| P0 | 持续回复卡片更新、节流和最终态兜底 | 已实现 running 节流、同一卡片互斥 flush 和最终态更新；后续补失败重试策略 |
+| P0 | 持续回复卡片更新、节流和最终态兜底 | 已实现 running 节流、同一卡片互斥 flush、基础发送/更新重试和最终态更新；后续补更细的错误分类退避策略 |
 | P0 | 卡片 footer 的状态、会话和排障字段 | 已展示 status / thread / turn / elapsed / model / fca version / error type / cwd；后续补 token/cache 等更细指标 |
 | P1 | 群聊 @、群配置和发送者策略 | 已实现 @ 触发、可选群 `chat_id` allowlist 和发送者 `open_id` 白名单复用；后续补 sender 细分策略和群级配置 |
 | P1 | 敏感操作确认卡片 | 映射到 Codex approval event，不复用 OpenClaw tool approval 内核 |
@@ -114,13 +114,14 @@ OpenClaw 的卡片链路包含：
 - CardKit 卡片优先，失败后回退到普通 IM 卡片。
 - 流式文本区域使用稳定 element id。
 - 更新节流和互斥 flush，避免 API 频率和并发更新冲突。
+- 发送或更新失败时应具备有限重试，最终失败再进入可观测错误链路。
 - 最终态必须落卡片，异常时展示可读错误。
 - footer 可配置展示状态、耗时、token、cache、context、model。
 
 fca 的目标：
 
 - MVP：普通 IM 卡片 send + patch，running / completed / failed 三态稳定。
-- 已增加运行中更新节流、同一卡片互斥 flush、per-chat queue 和飞书 API 错误归一化。
+- 已增加运行中更新节流、同一卡片互斥 flush、基础发送/更新重试、per-chat queue 和飞书 API 错误归一化。
 - 后续：再评估 CardKit 2.0 和更丰富 footer 指标。
 
 ## 不对齐项

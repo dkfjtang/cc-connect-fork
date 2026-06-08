@@ -58,12 +58,40 @@ test("sync surfaces sender failures", async () => {
     feishuChatId: "oc_123",
   });
   const controller = new TaskCardController({
+    maxSendAttempts: 1,
     sendAction: async () => {
       throw new Error("Feishu API failed");
     },
   });
 
   await assert.rejects(() => controller.sync(task), /Feishu API failed/);
+});
+
+test("sync retries transient sender failures", async () => {
+  const task = new RuntimeTask({
+    taskId: "task_123",
+    feishuChatId: "oc_123",
+    cwd: "F:\\development\\f-codex",
+  });
+  const actions = [];
+  const controller = new TaskCardController({
+    retryDelayMs: 0,
+    sendAction: async (action) => {
+      actions.push(action);
+      if (actions.length === 1) {
+        throw new Error("rate limited");
+      }
+
+      return { messageId: "om_123" };
+    },
+  });
+
+  await controller.sync(task);
+
+  assert.equal(actions.length, 2);
+  assert.equal(actions[0].type, "send");
+  assert.equal(actions[1].type, "send");
+  assert.equal(task.snapshot().cardMessageId, "om_123");
 });
 
 test("sync serializes concurrent card updates so later sync sees attached card", async () => {
@@ -111,6 +139,7 @@ test("sync continues queue after a failed update", async () => {
   });
   const actions = [];
   const controller = new TaskCardController({
+    maxSendAttempts: 1,
     sendAction: async (action) => {
       actions.push(action);
       if (actions.length === 1) {
