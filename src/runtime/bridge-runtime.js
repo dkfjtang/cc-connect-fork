@@ -12,6 +12,7 @@ export class BridgeRuntime {
   #logger;
   #model;
   #appVersion;
+  #groupDeveloperInstructions;
   #activeTasks = new Map();
 
   constructor({
@@ -27,6 +28,7 @@ export class BridgeRuntime {
     logger = null,
     model = null,
     appVersion = null,
+    groupDeveloperInstructions = {},
   }) {
     this.#policy = policy;
     this.#threadStore = threadStore;
@@ -39,6 +41,7 @@ export class BridgeRuntime {
     this.#clearTimeout = clearTimeoutFn;
     this.#model = model;
     this.#appVersion = appVersion;
+    this.#groupDeveloperInstructions = new Map(Object.entries(groupDeveloperInstructions));
     this.#logger = logger ?? {
       info: () => {},
       error: () => {},
@@ -104,7 +107,12 @@ export class BridgeRuntime {
         activeTask.resolveCancellation();
       } else {
         try {
-          const turnResult = await this.#session.startTurn({ threadId, text, cwd });
+          const turnResult = await this.#session.startTurn({
+            threadId,
+            text,
+            cwd,
+            developerInstructions: this.#developerInstructionsFor({ chatId, chatType }),
+          });
           if (turnResult.turn?.id) {
             task.handleCodexEvent({
               method: "turn/started",
@@ -261,6 +269,14 @@ export class BridgeRuntime {
 
     const write = this.#logger[level] ?? this.#logger.info ?? (() => {});
     write(event, fields);
+  }
+
+  #developerInstructionsFor({ chatId, chatType }) {
+    if (chatType !== "group") {
+      return null;
+    }
+
+    return this.#groupDeveloperInstructions.get(chatId) ?? null;
   }
 }
 

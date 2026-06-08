@@ -37,7 +37,7 @@ export class AppServerSession {
     return this.#client.request("thread/start", params);
   }
 
-  startTurn({ threadId, text, cwd }) {
+  startTurn({ threadId, text, cwd, developerInstructions = null }) {
     const params = {
       threadId,
       input: [{ type: "text", text }],
@@ -45,6 +45,9 @@ export class AppServerSession {
 
     if (cwd) {
       params.cwd = cwd;
+    }
+    if (developerInstructions) {
+      params.developer_instructions = developerInstructions;
     }
 
     return this.#client.request("turn/start", params);

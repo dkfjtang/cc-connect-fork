@@ -59,6 +59,7 @@ export function createBridgeApp({
         logger,
         model: config.codexModel,
         appVersion: config.appVersion,
+        groupDeveloperInstructions: config.groupDeveloperInstructions,
         turnTimeoutMs: config.turnTimeoutSeconds * 1000,
       });
       eventHandler = new FeishuEventHandler({

@@ -105,6 +105,7 @@ test("handleTextMessage creates and stores a thread when mapping is missing", as
       threadId: "thr_new",
       text: "hello",
       cwd: "F:\\development\\f-codex",
+      developerInstructions: null,
     },
   ]);
 });
@@ -144,6 +145,54 @@ test("handleTextMessage reuses group thread mapping by chat id across senders", 
     sessionCalls.map((call) => call.method),
     ["startTurn"],
   );
+});
+
+test("handleTextMessage passes group developer instructions to Codex turn", async () => {
+  const sessionCalls = [];
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession({ calls: sessionCalls }),
+    cardController: fakeCardController(),
+    groupDeveloperInstructions: { oc_group: "只处理本群项目上下文" },
+  });
+
+  await runtime.handleTextMessage({
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_group",
+    chatType: "group",
+    text: "hello",
+  });
+
+  assert.deepEqual(sessionCalls.at(-1), {
+    method: "startTurn",
+    threadId: "thr_new",
+    text: "hello",
+    cwd: "F:\\development\\f-codex",
+    developerInstructions: "只处理本群项目上下文",
+  });
+});
+
+test("handleTextMessage does not pass group developer instructions to private chat", async () => {
+  const sessionCalls = [];
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession({ calls: sessionCalls }),
+    cardController: fakeCardController(),
+    groupDeveloperInstructions: { oc_123: "只处理本群项目上下文" },
+  });
+
+  await runtime.handleTextMessage({
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_123",
+    chatType: "p2p",
+    text: "hello",
+  });
+
+  assert.equal(sessionCalls.at(-1).developerInstructions, null);
 });
 
 test("handleTextMessage syncs task card before and after turn", async () => {
@@ -648,8 +697,8 @@ function fakeSession({ calls = [], onEvent, startTurnHook, interruptTurn } = {})
       calls.push({ method: "startThread", options });
       return { thread: { id: "thr_new" } };
     },
-    startTurn: async ({ threadId, text, cwd }) => {
-      calls.push({ method: "startTurn", threadId, text, cwd });
+    startTurn: async ({ threadId, text, cwd, developerInstructions = null }) => {
+      calls.push({ method: "startTurn", threadId, text, cwd, developerInstructions });
       if (startTurnHook) {
         startTurnHook();
       } else {

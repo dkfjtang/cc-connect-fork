@@ -25,6 +25,9 @@ export function loadConfig(env = process.env) {
     allowedOpenIds: splitList(env.FCA_ALLOWED_OPEN_IDS, ","),
     allowedGroupChatIds: splitList(env.FCA_ALLOWED_GROUP_CHAT_IDS, ","),
     groupSenderOpenIds: parseGroupSenderOpenIds(env.FCA_GROUP_SENDER_OPEN_IDS),
+    groupDeveloperInstructions: parseGroupDeveloperInstructions(
+      env.FCA_GROUP_DEVELOPER_INSTRUCTIONS,
+    ),
     allowedWorkdirs,
     defaultWorkdir: env.FCA_DEFAULT_WORKDIR?.trim() || null,
     codexBin: env.FCA_CODEX_BIN?.trim() || DEFAULT_CODEX_BIN,
@@ -88,6 +91,35 @@ function parseGroupSenderOpenIds(value) {
     }
 
     result[chatId] = openIds;
+  }
+
+  return result;
+}
+
+function parseGroupDeveloperInstructions(value) {
+  if (!value) {
+    return {};
+  }
+
+  const result = {};
+  for (const rawEntry of value.split(";")) {
+    const entry = rawEntry.trim();
+    if (!entry) {
+      continue;
+    }
+
+    const separatorIndex = entry.indexOf("=");
+    if (separatorIndex <= 0 || separatorIndex === entry.length - 1) {
+      throw new Error("FCA_GROUP_DEVELOPER_INSTRUCTIONS entries must use chat_id=instructions");
+    }
+
+    const chatId = entry.slice(0, separatorIndex).trim();
+    const instructions = entry.slice(separatorIndex + 1).trim();
+    if (!chatId || !instructions) {
+      throw new Error("FCA_GROUP_DEVELOPER_INSTRUCTIONS entries must use chat_id=instructions");
+    }
+
+    result[chatId] = instructions;
   }
 
   return result;

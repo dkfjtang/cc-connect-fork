@@ -214,6 +214,7 @@ MVP 可以先实现：
 - 群聊内明确 @ Bot 的文本触发。
 - 可选配置群 `chat_id` allowlist，限制哪些群可触发 fca。
 - 可选配置群内 sender allowlist，限制指定群内哪些成员可触发 fca。
+- 可选配置群级 developer instructions，为指定群注入稳定上下文。
 - 首条任务卡片。
 - running / completed / failed 三态更新。
 - footer 展示 thread、turn、cwd、耗时。
@@ -232,6 +233,6 @@ MVP 暂不实现：
 
 - 审批按钮。
 - 文件卡片。
-- 群级配置和群级系统提示词。
+- 更复杂的群级配置文件。
 - 复杂 Markdown 渲染。
 - 卡片 JSON 2.0 高级组件。

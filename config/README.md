@@ -17,6 +17,7 @@
 | `FCA_ALLOWED_OPEN_IDS` | 允许使用 fca 的飞书 `open_id` 列表。 |
 | `FCA_ALLOWED_GROUP_CHAT_IDS` | 允许触发 fca 的飞书群聊 `chat_id` 列表；留空时不限制已 @ Bot 的群聊。 |
 | `FCA_GROUP_SENDER_OPEN_IDS` | 可选的群内 sender 收紧策略，格式为 `chat_id=open_id,open_id;chat_id=open_id`。 |
+| `FCA_GROUP_DEVELOPER_INSTRUCTIONS` | 可选的群级 Codex developer instructions，格式为 `chat_id=instructions;chat_id=instructions`。 |
 | `FCA_ALLOWED_WORKDIRS` | 允许 Codex 使用的本地工作目录列表。 |
 | `FCA_DEFAULT_WORKDIR` | 默认工作目录。 |
 | `FCA_CODEX_BIN` | Codex CLI 命令路径，默认可为 `codex`。 |
@@ -47,6 +48,7 @@ npm run check-config
 - `FCA_ALLOWED_OPEN_IDS` 是否至少包含一个 `open_id`。
 - `FCA_ALLOWED_GROUP_CHAT_IDS` 的配置数量会在摘要中展示；留空不报错。
 - `FCA_GROUP_SENDER_OPEN_IDS` 的策略数量会在摘要中展示；格式错误会报错。
+- `FCA_GROUP_DEVELOPER_INSTRUCTIONS` 的配置数量会在摘要中展示；格式错误会报错。
 - `FCA_ALLOWED_WORKDIRS` 是否至少包含一个本地目录。
 - `FCA_DEFAULT_WORKDIR` 是否存在且位于工作目录白名单内。
 - turn 超时、thread store、message dedup store 路径和 Codex 命令等基础 runtime 配置。

@@ -133,6 +133,8 @@ fca 将飞书文本转换为 Codex turn input。
 
 是否覆盖 model、sandbox、approval policy 由后续配置决定。MVP 只保留配置入口，不默认放开权限。
 
+群聊可通过 `FCA_GROUP_DEVELOPER_INSTRUCTIONS` 为指定 `chat_id` 配置 Codex developer instructions。Bridge 仅在群聊 turn 中传入 app-server `developer_instructions` 字段；私聊不会继承群级配置。
+
 ## JSON-RPC 分发
 
 适配层需要维护请求 id 和 pending map：

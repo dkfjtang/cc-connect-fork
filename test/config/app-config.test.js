@@ -8,6 +8,7 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
     FCA_ALLOWED_OPEN_IDS: "ou_1, ou_2",
     FCA_ALLOWED_GROUP_CHAT_IDS: "oc_1, oc_2",
     FCA_GROUP_SENDER_OPEN_IDS: "oc_1=ou_1,ou_2; oc_2=ou_2",
+    FCA_GROUP_DEVELOPER_INSTRUCTIONS: "oc_1=只处理 A 项目; oc_2=只处理 B 项目",
     FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex;F:\\development\\IDSS",
     FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
     FEISHU_APP_ID: "cli_123",
@@ -25,6 +26,10 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
   assert.deepEqual(config.groupSenderOpenIds, {
     oc_1: ["ou_1", "ou_2"],
     oc_2: ["ou_2"],
+  });
+  assert.deepEqual(config.groupDeveloperInstructions, {
+    oc_1: "只处理 A 项目",
+    oc_2: "只处理 B 项目",
   });
   assert.deepEqual(config.allowedWorkdirs, [
     "F:\\development\\f-codex",
@@ -47,6 +52,7 @@ test("loadConfig uses safe local defaults when optional values are missing", () 
   assert.deepEqual(config.allowedOpenIds, []);
   assert.deepEqual(config.allowedGroupChatIds, []);
   assert.deepEqual(config.groupSenderOpenIds, {});
+  assert.deepEqual(config.groupDeveloperInstructions, {});
   assert.deepEqual(config.allowedWorkdirs, []);
   assert.equal(config.defaultWorkdir, null);
   assert.equal(config.feishuAppId, null);
@@ -79,5 +85,12 @@ test("loadConfig rejects malformed group sender policy", () => {
   assert.throws(
     () => loadConfig({ FCA_GROUP_SENDER_OPEN_IDS: "oc_1" }),
     /FCA_GROUP_SENDER_OPEN_IDS entries must use chat_id=open_id/,
+  );
+});
+
+test("loadConfig rejects malformed group developer instructions", () => {
+  assert.throws(
+    () => loadConfig({ FCA_GROUP_DEVELOPER_INSTRUCTIONS: "oc_1" }),
+    /FCA_GROUP_DEVELOPER_INSTRUCTIONS entries must use chat_id=instructions/,
   );
 });

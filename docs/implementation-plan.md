@@ -131,6 +131,7 @@ Done 标准：
 - 群聊 @ 机器人已完成最小安全入口：只处理 `chat_type=group`、文本消息、`mentions` 命中当前 bot `open_id` 的事件。
 - `FCA_ALLOWED_GROUP_CHAT_IDS` 已提供可选群 `chat_id` allowlist；留空时保持已 @ Bot 群聊入口兼容。
 - `FCA_GROUP_SENDER_OPEN_IDS` 已提供可选群内 sender 收紧策略；它只在全局 `open_id` 白名单之上进一步限制指定群。
+- `FCA_GROUP_DEVELOPER_INSTRUCTIONS` 已提供可选群级 developer instructions，并通过 Codex app-server `developer_instructions` 传入 turn。
 - 普通群聊文本仍跳过；进入 `BridgeRuntime` 后仍使用飞书发送者 `open_id` 白名单作为权限依据。
 - 群聊任务继续按 `chat_id` 串行，避免同一群内多个 Codex turn 并发打乱卡片状态。
 
@@ -140,9 +141,9 @@ Done 标准：
 - CardKit 2.0 流式卡片，失败后回退 IM patch。
 - 取消/停止任务快路径。
 - 运行中进度消息。
-- 群级系统提示词。
-- 文件下载和回传。
 - SQLite thread store。
+- 文件下载和回传。
+- 群级配置文件。
 - WebSocket 长驻部署模式。
 
 进入条件：

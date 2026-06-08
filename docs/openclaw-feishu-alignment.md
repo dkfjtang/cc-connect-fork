@@ -68,7 +68,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | P0 | 按 chat / thread 串行队列 | 已增加 per-chat queue，避免同一会话并发 turn 打乱卡片 |
 | P0 | 卡片更新节流 | 已增加 delta 聚合低频 patch 和同一卡片更新队列 |
 | P1 | CardKit 优先、IM patch fallback | MVP 先用 IM card patch，后续增加 CardKit 2.0 |
-| P1 | 群聊策略 | 已完成群聊 @ 最小入口、可选群 `chat_id` allowlist 和群内 sender 收紧策略；群级系统提示词后续补齐 |
+| P1 | 群聊策略 | 已完成群聊 @ 最小入口、可选群 `chat_id` allowlist、群内 sender 收紧策略和群级 developer instructions |
 | P1 | 卡片交互审批 | Codex approval event 映射到飞书按钮回调 |
 | P2 | 文件/图片资源 | 后续作为 Codex 输入附件和输出附件能力规划 |
 | P2 | 文档/多维表/日历/任务工具 | 不属于 fca MVP；只在 Codex 能力需要飞书工具时评估 |
@@ -81,7 +81,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | P0 | 消息事件去重、回放过滤、自回声过滤 | 已实现基础护栏和持久化去重窗口，避免进程重启后重复处理 |
 | P0 | 持续回复卡片更新、节流和最终态兜底 | 已实现 running 节流、同一卡片互斥 flush、基础发送/更新重试和最终态更新；后续补更细的错误分类退避策略 |
 | P0 | 卡片 footer 的状态、会话和排障字段 | 已展示 status / thread / turn / elapsed / model / fca version / error type / cwd；后续补 token/cache 等更细指标 |
-| P1 | 群聊 @、群配置和发送者策略 | 已实现 @ 触发、可选群 `chat_id` allowlist、全局发送者 `open_id` 白名单和群内 sender 收紧策略；后续补群级配置 |
+| P1 | 群聊 @、群配置和发送者策略 | 已实现 @ 触发、可选群 `chat_id` allowlist、全局发送者 `open_id` 白名单、群内 sender 收紧策略和群级 developer instructions |
 | P1 | 敏感操作确认卡片 | 映射到 Codex approval event，不复用 OpenClaw tool approval 内核 |
 | P1 | CardKit 2.0 与普通卡片降级 | 先保留 IM patch；后续实现 CardKit 优先、IM patch fallback |
 
@@ -103,6 +103,7 @@ fca 当前已实现 1 到 6。
 - 仅 `chat_type=group` 且文本内容的 `mentions` 包含当前 bot `open_id` 时进入任务链路。
 - 如果配置了 `FCA_ALLOWED_GROUP_CHAT_IDS`，群聊 `chat_id` 必须命中该 allowlist；留空则保持群 @ 入口兼容，不额外限制群。
 - 如果配置了 `FCA_GROUP_SENDER_OPEN_IDS`，指定群内发送者 `open_id` 还必须命中该群 sender allowlist；留空或未配置该群时不额外收紧。
+- 如果配置了 `FCA_GROUP_DEVELOPER_INSTRUCTIONS`，该群的 Codex turn 会通过 app-server `developer_instructions` 接收群级上下文；私聊不受影响。
 - 解析时会移除 mention key，只把用户真实任务文本交给 Codex。
 - 普通群聊文本继续跳过，不作为后台触发命令。
 - 进入运行时后仍以发送者 `open_id` 白名单为准，不使用群名、昵称等可变展示字段做权限依据。

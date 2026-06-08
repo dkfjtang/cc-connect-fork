@@ -29,6 +29,7 @@
 - 仅支持白名单飞书用户的私聊文本消息，以及明确 @ Bot 的群聊文本消息。
 - 可选配置允许触发的群聊 `chat_id`。
 - 可选配置指定群内允许触发的发送者 `open_id`。
+- 可选配置指定群的 Codex developer instructions。
 - 本地启动并管理一个 `codex app-server` 子进程。
 - 第一阶段使用 `stdio://` 传输，不开放远程 WebSocket 监听。
 - 为每个飞书私聊用户和群聊会话维护基础 thread 映射。
@@ -117,7 +118,7 @@ Bridge 侧需要封装一个 Codex client，负责：
 
 - 评估飞书交互卡片审批。
 - 评估文件下载与回传。
-- 评估群级配置和系统提示词。
+- 评估群级配置文件。
 - 评估 WebSocket 或长驻 app-server 部署模式。
 
 ## 待确认事项
