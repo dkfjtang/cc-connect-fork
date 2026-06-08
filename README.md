@@ -50,7 +50,7 @@
 npm test
 ```
 
-当前测试覆盖 Codex JSON-RPC client、app-server session、stdio JSONL channel、app-server 子进程封装、streamed delta 输出聚合、运行态状态转换、配置解析、访问策略和 smoke CLI 参数。
+当前测试覆盖 Codex JSON-RPC client、app-server session、stdio JSONL channel、app-server 子进程封装、streamed delta 输出聚合、运行态状态转换、配置解析、访问策略、飞书任务卡片渲染、卡片发送/更新动作和 smoke CLI 参数。
 
 ## 文档索引
 
