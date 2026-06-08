@@ -10,6 +10,8 @@ export class BridgeRuntime {
   #clearTimeout;
   #runningUpdateThrottleMs;
   #logger;
+  #model;
+  #appVersion;
   #activeTasks = new Map();
 
   constructor({
@@ -23,6 +25,8 @@ export class BridgeRuntime {
     setTimeoutFn = (callback, delay) => setTimeout(callback, delay),
     clearTimeoutFn = (timer) => clearTimeout(timer),
     logger = null,
+    model = null,
+    appVersion = null,
   }) {
     this.#policy = policy;
     this.#threadStore = threadStore;
@@ -33,6 +37,8 @@ export class BridgeRuntime {
     this.#now = now;
     this.#setTimeout = setTimeoutFn;
     this.#clearTimeout = clearTimeoutFn;
+    this.#model = model;
+    this.#appVersion = appVersion;
     this.#logger = logger ?? {
       info: () => {},
       error: () => {},
@@ -55,6 +61,8 @@ export class BridgeRuntime {
       feishuOpenId: openId,
       feishuChatId: chatId,
       cwd,
+      model: this.#model,
+      appVersion: this.#appVersion,
     });
     const activeKey = chatId || "unknown";
     const activeTask = {
@@ -73,7 +81,9 @@ export class BridgeRuntime {
       let threadId = mapping?.threadId;
 
       if (!threadId) {
-        const threadResult = await this.#session.startThread({});
+        const threadResult = await this.#session.startThread(
+          this.#model ? { model: this.#model } : {},
+        );
         threadId = threadResult.thread.id;
         task.attachThread(threadId);
         this.#logTask("info", "task.thread_created", task);

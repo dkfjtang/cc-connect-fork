@@ -9,6 +9,8 @@ export class RuntimeTask {
   #threadId = null;
   #turnId = null;
   #cwd;
+  #model;
+  #appVersion;
   #now;
   #startedAt;
   #completedAt = null;
@@ -23,6 +25,8 @@ export class RuntimeTask {
     feishuOpenId = null,
     feishuChatId = null,
     cwd = null,
+    model = null,
+    appVersion = null,
     now = () => Date.now(),
     summaryLimit,
   }) {
@@ -31,6 +35,8 @@ export class RuntimeTask {
     this.#feishuOpenId = feishuOpenId;
     this.#feishuChatId = feishuChatId;
     this.#cwd = cwd;
+    this.#model = model;
+    this.#appVersion = appVersion;
     this.#now = now;
     this.#startedAt = this.#now();
     this.#output = new TurnOutputBuffer({ summaryLimit });
@@ -84,6 +90,8 @@ export class RuntimeTask {
       threadId: this.#threadId,
       turnId: this.#turnId,
       cwd: this.#cwd,
+      model: this.#model,
+      appVersion: this.#appVersion,
       status: this.#status,
       startedAt: this.#startedAt,
       completedAt: this.#completedAt,

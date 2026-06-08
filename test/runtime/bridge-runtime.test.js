@@ -66,6 +66,8 @@ test("handleTextMessage creates and stores a thread when mapping is missing", as
     threadStore,
     session: fakeSession({ calls: sessionCalls }),
     cardController: fakeCardController(),
+    model: "gpt-5.1-codex",
+    appVersion: "0.2.0-test",
   });
 
   const task = await runtime.handleTextMessage({
@@ -76,6 +78,8 @@ test("handleTextMessage creates and stores a thread when mapping is missing", as
   });
 
   assert.equal(task.snapshot().threadId, "thr_new");
+  assert.equal(task.snapshot().model, "gpt-5.1-codex");
+  assert.equal(task.snapshot().appVersion, "0.2.0-test");
   assert.deepEqual(
     await threadStore.getThread({
       openId: "ou_allowed",
@@ -89,10 +93,15 @@ test("handleTextMessage creates and stores a thread when mapping is missing", as
       lastSeenAt: "test-now",
     },
   );
-  assert.deepEqual(
-    sessionCalls.map((call) => call.method),
-    ["startThread", "startTurn"],
-  );
+  assert.deepEqual(sessionCalls, [
+    { method: "startThread", options: { model: "gpt-5.1-codex" } },
+    {
+      method: "startTurn",
+      threadId: "thr_new",
+      text: "hello",
+      cwd: "F:\\development\\f-codex",
+    },
+  ]);
 });
 
 test("handleTextMessage syncs task card before and after turn", async () => {
@@ -593,8 +602,8 @@ function fakeSession({ calls = [], onEvent, startTurnHook, interruptTurn } = {})
       eventHandler = handler;
       return onEvent ? onEvent(handler) : () => {};
     },
-    startThread: async () => {
-      calls.push({ method: "startThread" });
+    startThread: async (options = {}) => {
+      calls.push({ method: "startThread", options });
       return { thread: { id: "thr_new" } };
     },
     startTurn: async ({ threadId, text, cwd }) => {

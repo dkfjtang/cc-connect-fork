@@ -10,6 +10,8 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
     FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
     FEISHU_APP_ID: "cli_123",
     FCA_CODEX_BIN: "codex",
+    FCA_CODEX_MODEL: "gpt-5.1-codex",
+    FCA_VERSION: "0.2.0-test",
     FCA_THREAD_STORE_PATH: "data\\threads.json",
     FCA_MESSAGE_DEDUP_STORE_PATH: "data\\message-dedup.json",
     FCA_MESSAGE_DEDUP_TTL_SECONDS: "3600",
@@ -24,6 +26,8 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
   assert.equal(config.feishuAppId, "cli_123");
   assert.equal(config.defaultWorkdir, "F:\\development\\f-codex");
   assert.equal(config.codexBin, "codex");
+  assert.equal(config.codexModel, "gpt-5.1-codex");
+  assert.equal(config.appVersion, "0.2.0-test");
   assert.equal(config.threadStorePath, "data\\threads.json");
   assert.equal(config.messageDedupStorePath, "data\\message-dedup.json");
   assert.equal(config.messageDedupTtlSeconds, 3600);
@@ -39,6 +43,8 @@ test("loadConfig uses safe local defaults when optional values are missing", () 
   assert.equal(config.feishuAppId, null);
   assert.equal(config.codexBin, "codex");
   assert.equal(config.codexListen, "stdio://");
+  assert.equal(config.codexModel, null);
+  assert.equal(config.appVersion, "0.1.0");
   assert.equal(config.logLevel, "info");
   assert.equal(config.threadStorePath, "data/threads.json");
   assert.equal(config.messageDedupStorePath, "data/message-dedup.json");

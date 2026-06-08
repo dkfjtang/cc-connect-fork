@@ -57,6 +57,8 @@ export function createBridgeApp({
         session,
         cardController,
         logger,
+        model: config.codexModel,
+        appVersion: config.appVersion,
         turnTimeoutMs: config.turnTimeoutSeconds * 1000,
       });
       eventHandler = new FeishuEventHandler({

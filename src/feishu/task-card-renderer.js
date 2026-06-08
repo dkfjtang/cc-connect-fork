@@ -65,6 +65,8 @@ function footerText(snapshot) {
     snapshot.threadId ? `thread: ${shortId(snapshot.threadId)}` : null,
     snapshot.turnId ? `turn: ${shortId(snapshot.turnId)}` : null,
     typeof snapshot.elapsedMs === "number" ? `耗时: ${formatElapsed(snapshot.elapsedMs)}` : null,
+    snapshot.model ? `model: ${snapshot.model}` : null,
+    snapshot.appVersion ? `fca: ${snapshot.appVersion}` : null,
     snapshot.errorType ? `错误: ${snapshot.errorType}` : null,
     snapshot.cwd ? `cwd: ${snapshot.cwd}` : null,
   ]

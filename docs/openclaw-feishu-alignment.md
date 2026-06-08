@@ -49,7 +49,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | --- | --- | --- |
 | 私聊文本入口 | 支持 DM 消息进入 Agent | 已支持私聊文本解析 |
 | 卡片持续更新 | 先发卡片，再更新同一张卡片 | 已有 send / update action 和 controller，并串行化同一卡片更新 |
-| footer | 可展示状态、耗时、模型、token 等 | 已展示 status / thread / turn / elapsed / error type / cwd |
+| footer | 可展示状态、耗时、模型、token 等 | 已展示 status / thread / turn / elapsed / model / fca version / error type / cwd |
 | app 归属校验 | 事件 app_id 不匹配时丢弃 | 已支持 `FEISHU_APP_ID` 校验 |
 | 自回声过滤 | bot 自己发出的消息不再处理 | 已支持 `botOpenId` 过滤入口 |
 | 去重 | WebSocket 重连重复消息只处理一次 | 已支持持久化 message_id 去重窗口 |
@@ -79,7 +79,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | P0 | 长连接启动、重连、事件分发和错误日志 | 已接入 SDK 长连接；继续补结构化日志和连接状态可观测性 |
 | P0 | 消息事件去重、回放过滤、自回声过滤 | 已实现基础护栏和持久化去重窗口，避免进程重启后重复处理 |
 | P0 | 持续回复卡片更新、节流和最终态兜底 | 已实现 running 节流、同一卡片互斥 flush 和最终态更新；后续补失败重试策略 |
-| P0 | 卡片 footer 的状态、会话和排障字段 | 已展示 status / thread / turn / elapsed / error type / cwd；后续补模型和 fca 版本 |
+| P0 | 卡片 footer 的状态、会话和排障字段 | 已展示 status / thread / turn / elapsed / model / fca version / error type / cwd；后续补 token/cache 等更细指标 |
 | P1 | 群聊 @、群配置和发送者策略 | 私聊稳定后实现群 allowlist、sender allowlist 和 @ 触发 |
 | P1 | 敏感操作确认卡片 | 映射到 Codex approval event，不复用 OpenClaw tool approval 内核 |
 | P1 | CardKit 2.0 与普通卡片降级 | 先保留 IM patch；后续实现 CardKit 优先、IM patch fallback |

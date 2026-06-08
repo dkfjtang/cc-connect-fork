@@ -20,6 +20,7 @@
 | `FCA_CODEX_BIN` | Codex CLI 命令路径，默认可为 `codex`。 |
 | `FCA_CODEX_LISTEN` | app-server 监听方式，MVP 固定使用 `stdio://`。 |
 | `FCA_CODEX_MODEL` | 可选 Codex 模型覆盖。 |
+| `FCA_VERSION` | fca 版本标识，默认 `0.1.0`，会展示在卡片 footer 和结构化日志上下文。 |
 | `FCA_LOG_LEVEL` | JSONL 结构化日志级别，可选 `debug` / `info` / `warn` / `error`，默认 `info`。 |
 | `FCA_TURN_TIMEOUT_SECONDS` | 单个 turn 超时时间。 |
 | `FCA_THREAD_STORE_PATH` | 本地 thread 映射 JSON 文件路径。 |

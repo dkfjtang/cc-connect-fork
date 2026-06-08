@@ -10,6 +10,8 @@ test("new runtime task starts queued with Feishu context", () => {
     feishuOpenId: "ou_123",
     feishuChatId: "chat_123",
     cwd: "F:\\development\\f-codex",
+    model: "gpt-5.1-codex",
+    appVersion: "0.2.0-test",
     now: () => 1_000,
   });
 
@@ -22,6 +24,8 @@ test("new runtime task starts queued with Feishu context", () => {
     threadId: null,
     turnId: null,
     cwd: "F:\\development\\f-codex",
+    model: "gpt-5.1-codex",
+    appVersion: "0.2.0-test",
     status: "queued",
     startedAt: 1000,
     completedAt: null,

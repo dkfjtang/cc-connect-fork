@@ -120,6 +120,7 @@ Done 标准：
 - `TaskCardController` 已串行化同一卡片的 send / update，避免运行中 patch 与最终态 patch 并发乱序。
 - `FeishuEventHandler` 已通过 JSON 文件 message dedup store 持久化 `message_id` 去重窗口，降低重连或进程重启回放导致的重复执行风险。
 - `RuntimeTask` 和任务卡片 footer 已补充 `elapsedMs`、运行时长展示和 `errorType`，便于按卡片直接判断耗时和失败类别。
+- `FCA_CODEX_MODEL` 已贯穿到 Codex `thread/start`、任务 snapshot 和卡片 footer；`FCA_VERSION` 已进入配置检查和 footer。
 
 ## M5 下一阶段评估
 

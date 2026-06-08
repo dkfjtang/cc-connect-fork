@@ -32,6 +32,8 @@ test("renderTaskCard renders running status with thread and turn footer", () => 
     finalText: "",
     threadId: "thr_123456789",
     turnId: "turn_123456789",
+    model: "gpt-5.1-codex",
+    appVersion: "0.2.0-test",
     elapsedMs: 3500,
     errorSummary: null,
     errorType: null,
@@ -42,6 +44,8 @@ test("renderTaskCard renders running status with thread and turn footer", () => 
   assert.match(card.elements.at(-1).elements[0].content, /thread: thr_1234/);
   assert.match(card.elements.at(-1).elements[0].content, /turn: turn_123/);
   assert.match(card.elements.at(-1).elements[0].content, /耗时: 3\.5s/);
+  assert.match(card.elements.at(-1).elements[0].content, /model: gpt-5.1-codex/);
+  assert.match(card.elements.at(-1).elements[0].content, /fca: 0.2.0-test/);
 });
 
 test("renderTaskCard renders completed status with final text", () => {

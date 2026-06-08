@@ -5,6 +5,7 @@ const DEFAULT_TURN_TIMEOUT_SECONDS = 900;
 const DEFAULT_MESSAGE_DEDUP_TTL_SECONDS = 86400;
 const DEFAULT_THREAD_STORE_PATH = "data/threads.json";
 const DEFAULT_MESSAGE_DEDUP_STORE_PATH = "data/message-dedup.json";
+const DEFAULT_APP_VERSION = "0.1.0";
 
 export function loadConfig(env = process.env) {
   const allowedWorkdirs = splitList(env.FCA_ALLOWED_WORKDIRS, ";");
@@ -27,6 +28,7 @@ export function loadConfig(env = process.env) {
     codexBin: env.FCA_CODEX_BIN?.trim() || DEFAULT_CODEX_BIN,
     codexListen: env.FCA_CODEX_LISTEN?.trim() || DEFAULT_CODEX_LISTEN,
     codexModel: env.FCA_CODEX_MODEL?.trim() || null,
+    appVersion: env.FCA_VERSION?.trim() || DEFAULT_APP_VERSION,
     logLevel: env.FCA_LOG_LEVEL?.trim() || DEFAULT_LOG_LEVEL,
     threadStorePath: env.FCA_THREAD_STORE_PATH?.trim() || DEFAULT_THREAD_STORE_PATH,
     messageDedupStorePath:
