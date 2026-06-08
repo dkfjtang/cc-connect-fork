@@ -162,7 +162,7 @@ Done 标准：
 - `FCA_FEISHU_FILE_INPUTS_ENABLED` 已进入配置检查和 diagnostics，只暴露布尔开关状态，不暴露附件 key、文件名、路径或内容。
 - 非文本消息已先进入脱敏 envelope：只保留 `message_id`、`chat_id`、`chat_type`、`message_type` 和 `attachmentKind` 枚举，不解析附件 `content`。
 - 附件输入策略已独立为决策函数，当前只产出 `skip` / `notify_disabled` / `notify_unsupported` / `eligible`，`eligible` 仍被事件层固定提示拦截，不触发下载。
-- 附件下载前的脱敏审批摘要已定义，包含固定风险、附件类型、短消息 id 和会话类型；当前只用于后续审批/审计准备，不接真实审批卡片。
+- 附件下载前的脱敏审批摘要已定义，包含固定风险、附件类型、短消息 id 和会话类型；并可转换为现有 waiting approval 卡片模型。当前只用于后续审批/审计准备，不触发真实审批按钮回调或下载。
 - 长驻进程已具备基础退出治理：本机开发入口收到 `SIGINT` / `SIGTERM` 后会 best-effort 停止 app-server 子进程和飞书 transport，降低长任务或 WS listener 残留风险；飞书长连接默认依赖 SDK 自动重连，重连阶段会输出结构化日志。
 
 候选能力：

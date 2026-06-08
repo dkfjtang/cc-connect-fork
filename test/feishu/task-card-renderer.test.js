@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import {
+  buildAttachmentApprovalCardModel,
+  buildAttachmentApprovalSummary,
+} from "../../src/feishu/attachment-policy.js";
 import { renderTaskCard } from "../../src/feishu/task-card-renderer.js";
 
 test("renderTaskCard renders queued status with user input summary", () => {
@@ -210,6 +214,46 @@ test("renderTaskCard renders expanded approval details", () => {
     card.elements[0].text.content,
     "审批详情\n\nCodex 请求额外权限，需要审批。\n\n风险: 高\n风险因素: 权限变更 / 文件写入\n目录: f-codex\n权限: 读 1 / 写 2\n网络目标: api.example.com\n包含说明: 是\n附加提示: 已脱敏\n\n仅展示脱敏摘要，未展示命令正文、diff、完整路径或原始 payload。\n\napproval: approval",
   );
+});
+
+test("renderTaskCard renders sanitized attachment approval model", () => {
+  const approval = buildAttachmentApprovalCardModel(
+    buildAttachmentApprovalSummary(
+      {
+        messageId: "om_file_123456789",
+        chatType: "p2p",
+        attachmentKind: "file",
+        fileKey: "file_secret",
+        fileName: "secret.txt",
+      },
+      { attachmentKind: "file" },
+    ),
+    {
+      requestId: "attachment-request",
+      approvalId: "attachment-approval",
+      itemId: "attachment-item",
+    },
+  );
+
+  const card = renderTaskCard({
+    taskId: "task_123",
+    status: "waiting_approval",
+    summaryText: "",
+    finalText: "",
+    approval,
+  });
+
+  assert.equal(card.header.title.content, "需要确认");
+  assert.equal(
+    card.elements[0].text.content,
+    "Codex 请求读取飞书附件，需要先完成确认和审计。\n\n风险: 中\n风险因素: 飞书附件读取\n附件类型: 文件\n消息: om_file_\n会话类型: 私聊\n仅展示脱敏摘要，未展示文件名、附件 key 或附件内容。\n\napproval: attachme",
+  );
+  assert.equal(card.elements[1].tag, "action");
+  assert.equal(card.elements[1].actions[0].value.requestId, "attachment-request");
+  assert.equal(card.elements[1].actions[0].value.approvalId, "attachment-approval");
+  assert.equal(JSON.stringify(card).includes("file_secret"), false);
+  assert.equal(JSON.stringify(card).includes("secret.txt"), false);
+  assert.equal(JSON.stringify(card).includes("om_file_123456789"), false);
 });
 
 test("renderTaskCard truncates overly long card body", () => {

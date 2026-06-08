@@ -128,6 +128,7 @@ fca 映射：
 - 非文本消息已增加安全 envelope，后续对齐 OpenClaw 文件/图片下载能力时只从该 envelope 进入下载流程，日志仍只允许记录 `attachmentKind` 枚举。
 - 附件输入策略层已能按开关、chat 类型和附件分类给出 `eligible` 决策；真实下载仍未接入，避免在缺少审批和审计闭环时读取飞书文件内容。
 - 附件下载审批摘要已先收敛为 Codex 风格的脱敏风险信息；后续可映射到现有 approval card，但当前不触发审批按钮或下载动作。
+- 附件审批摘要已验证可渲染为现有 waiting approval 卡片模型，复用当前卡片结构和按钮 value 形状；后续接入前仍需要真实 pending approval 映射和下载执行器。
 
 差异理由：
 

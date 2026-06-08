@@ -72,6 +72,27 @@ export function buildAttachmentApprovalSummary(envelope, decision) {
   };
 }
 
+export function buildAttachmentApprovalCardModel(summary, {
+  requestId = null,
+  approvalId = null,
+  itemId = null,
+  status = "pending",
+  detailExpanded = false,
+} = {}) {
+  return {
+    requestId,
+    approvalId,
+    itemId,
+    status,
+    detailExpanded,
+    type: summary?.type ?? "feishu_attachment_input",
+    summary: summary?.summary ?? "Codex 请求读取飞书附件，需要先完成确认和审计。",
+    risk: summary?.risk ?? "中",
+    riskReasons: Array.isArray(summary?.riskReasons) ? summary.riskReasons : ["飞书附件读取"],
+    details: Array.isArray(summary?.details) ? summary.details : [],
+  };
+}
+
 function shortId(value) {
   if (!value) {
     return "unknown";

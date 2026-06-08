@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import {
+  buildAttachmentApprovalCardModel,
   buildAttachmentApprovalSummary,
   decideAttachmentInput,
 } from "../../src/feishu/attachment-policy.js";
@@ -137,6 +138,41 @@ test("buildAttachmentApprovalSummary handles unknown attachment kinds", () => {
         "附件类型: 未知",
         "消息: om_unkno",
         "会话类型: 群聊",
+        "仅展示脱敏摘要，未展示文件名、附件 key 或附件内容。",
+      ],
+    },
+  );
+});
+
+test("buildAttachmentApprovalCardModel maps summary to task-card approval shape", () => {
+  const summary = buildAttachmentApprovalSummary(
+    { messageId: "om_file_123456789", chatType: "p2p", attachmentKind: "file" },
+    { attachmentKind: "file" },
+  );
+
+  assert.deepEqual(
+    buildAttachmentApprovalCardModel(summary, {
+      requestId: "attachment-request",
+      approvalId: "attachment-approval",
+      itemId: "attachment-item",
+      detailExpanded: true,
+    }),
+    {
+      requestId: "attachment-request",
+      approvalId: "attachment-approval",
+      itemId: "attachment-item",
+      status: "pending",
+      detailExpanded: true,
+      type: "feishu_attachment_input",
+      summary: "Codex 请求读取飞书附件，需要先完成确认和审计。",
+      risk: "中",
+      riskReasons: ["飞书附件读取"],
+      details: [
+        "风险: 中",
+        "风险因素: 飞书附件读取",
+        "附件类型: 文件",
+        "消息: om_file_",
+        "会话类型: 私聊",
         "仅展示脱敏摘要，未展示文件名、附件 key 或附件内容。",
       ],
     },
