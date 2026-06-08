@@ -1,0 +1,217 @@
+# 飞书交互模型
+
+## 结论
+
+fca 可以高度复用 OpenClaw 类飞书插件的交互体验，但不应完全复用其 Agent 执行内核。
+
+推荐边界：
+
+```text
+高度复用：飞书长连接、消息发送、卡片渲染、卡片更新、footer 展示约定
+需要适配：任务状态机、进度聚合、审批卡片、错误展示
+必须重写：Codex app-server client、thread/turn 映射、Codex 事件翻译、安全策略
+```
+
+原因是飞书侧能力和用户体验可以保持一致，但 Codex 的执行模型是 thread、turn、item、streamed event 和 approval，不等同于 OpenClaw 的任务模型。
+
+## 官方能力基线
+
+第一阶段交互模型依赖以下飞书能力：
+
+- 长连接事件接入：Bridge 通过飞书 SDK 建立 WebSocket 长连接接收事件。
+- 发送文本或卡片消息：Bridge 可主动向用户回复任务状态。
+- 更新已发送卡片：Bridge 可先发任务卡片，再持续更新同一张卡片。
+- 卡片交互回调：后续审批、取消、继续执行可以通过卡片按钮触发。
+- 卡片 JSON 2.0：后续可承载更丰富的布局、状态和流式更新体验。
+
+参考文档：
+
+- 飞书长连接事件订阅：`https://open.feishu.cn/document/server-docs/event-subscription-guide/event-subscription-configure-/request-url-configuration-case`
+- 飞书消息 API：`https://open.feishu.cn/document/server-docs/im-v1/introduction`
+- 更新应用发送的消息卡片：`https://open.feishu.cn/document/server-docs/im-v1/message-card/patch`
+- 飞书卡片 JSON 2.0：`https://open.feishu.cn/document/uAjLw4CM/ukzMukzMukzM/feishu-cards/card-json-v2-structure`
+
+## 用户体验目标
+
+用户在飞书里看到的是一个持续更新的任务卡片，而不是大量零散消息。
+
+最小体验：
+
+1. 用户发送任务文本。
+2. fca 立即回复一张任务卡片，状态为“已接收”。
+3. Codex turn 启动后，卡片更新为“执行中”。
+4. Codex 输出阶段性消息时，卡片摘要区域更新。
+5. Codex 完成后，卡片更新为“已完成”，展示最终回复。
+6. 失败或超时时，卡片更新为“失败”或“超时”，展示可读原因。
+
+## 卡片状态
+
+### queued
+
+含义：飞书消息已收到，尚未进入 Codex turn。
+
+展示：
+
+- 标题：任务已接收
+- 正文：用户输入摘要
+- footer：`open_id`、`message_id`、默认工作目录
+
+### running
+
+含义：Codex turn 已启动，正在执行。
+
+展示：
+
+- 标题：Codex 执行中
+- 正文：最近一条可展示的 agent 摘要或进度
+- footer：`thread_id`、`turn_id`、工作目录、运行时长
+
+### waiting_approval
+
+含义：Codex 需要用户审批。
+
+展示：
+
+- 标题：需要确认
+- 正文：动作类型、影响范围、风险摘要
+- 操作：允许、拒绝、查看详情
+- footer：`thread_id`、`turn_id`、approval id
+
+第一阶段不实现完整审批，但卡片结构要预留。
+
+### completed
+
+含义：Codex turn 正常完成。
+
+展示：
+
+- 标题：已完成
+- 正文：最终文本回复
+- footer：`thread_id`、`turn_id`、耗时、状态
+
+### failed
+
+含义：Bridge、app-server、Codex turn 或飞书回传失败。
+
+展示：
+
+- 标题：执行失败
+- 正文：可读错误摘要
+- footer：错误类型、`message_id`、可追踪 id
+
+### cancelled
+
+含义：用户取消或系统中断。
+
+展示：
+
+- 标题：已取消
+- 正文：取消原因
+- footer：`thread_id`、`turn_id`、取消时间
+
+## footer 信息规范
+
+footer 只展示排障有用、但不泄露敏感信息的字段。
+
+推荐字段：
+
+- 状态：queued / running / waiting_approval / completed / failed / cancelled
+- 工作目录：只显示白名单内路径或项目别名
+- Codex thread：短 id
+- Codex turn：短 id
+- 运行时长
+- 模型：如已配置可展示
+- fca 版本：后续实现后展示
+
+不展示：
+
+- App Secret
+- Verification Token
+- Encrypt Key
+- Codex 凭据
+- 完整环境变量
+- 未脱敏本机敏感路径
+- 大段内部堆栈
+
+## Codex 事件映射
+
+| Codex app-server 事件 | 飞书卡片动作 |
+| --- | --- |
+| `thread/start` result | 写入 thread 映射，更新 footer |
+| `turn/started` | 卡片状态改为 running |
+| `item/started` | 更新当前阶段摘要 |
+| `item/agentMessage/delta` | 聚合文本 delta，不逐字更新 |
+| `item/completed` | 更新阶段完成摘要 |
+| approval 类事件 | 卡片状态改为 waiting_approval |
+| `turn/completed` success | 卡片状态改为 completed |
+| `turn/completed` failure | 卡片状态改为 failed |
+| app-server 断开 | 卡片状态改为 failed |
+
+## 更新节流
+
+飞书卡片不应对每个 token 或每个 delta 做更新。
+
+MVP 策略：
+
+- 首次收到消息立即发卡片。
+- turn 启动时更新一次。
+- agent 文本 delta 聚合到本地缓冲。
+- 每 3 到 5 秒最多更新一次运行中摘要。
+- 完成或失败时必须更新一次最终状态。
+
+这样既能体现持续执行，又避免消息 API 频率和用户体验问题。
+
+## 审批卡片预留
+
+后续审批卡片需要承载：
+
+- 动作类型：命令、写文件、联网、外发文件、切换目录。
+- 影响范围：工作目录、目标文件、目标域名或命令摘要。
+- 风险等级：低、中、高。
+- 选择项：允许一次、拒绝、停止任务。
+- 回调上下文：`thread_id`、`turn_id`、approval id。
+
+审批结果必须回写 Codex app-server，而不是只更新飞书卡片。
+
+## 与 OpenClaw 能力的复用边界
+
+可以复用：
+
+- 飞书 SDK 接入方式。
+- WebSocket 长连接生命周期管理经验。
+- 卡片模板结构。
+- 持续更新同一张卡片的交互习惯。
+- footer 字段风格。
+- 错误和完成态视觉语言。
+
+需要改造：
+
+- 任务状态机要从 OpenClaw task 改为 Codex thread / turn。
+- 进度来源要从 OpenClaw 事件改为 Codex app-server notification。
+- 审批按钮要对接 Codex approval 事件。
+- 任务取消要对接 Codex turn interrupt。
+
+不能复用：
+
+- OpenClaw Agent 执行内核。
+- OpenClaw 权限模型。
+- OpenClaw 工作目录策略。
+- OpenClaw 私有任务 id 作为 fca 权威 id。
+
+## MVP 取舍
+
+MVP 可以先实现：
+
+- 私聊文本触发。
+- 首条任务卡片。
+- running / completed / failed 三态更新。
+- footer 展示 thread、turn、cwd、耗时。
+- delta 聚合后低频更新。
+
+MVP 暂不实现：
+
+- 审批按钮。
+- 文件卡片。
+- 群聊交互。
+- 复杂 Markdown 渲染。
+- 卡片 JSON 2.0 高级组件。

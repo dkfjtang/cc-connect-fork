@@ -49,6 +49,7 @@
 - [项目章程](docs/project-charter.md)
 - [MVP 推进方案](docs/mvp-plan.md)
 - [系统架构](docs/architecture.md)
+- [飞书交互模型](docs/feishu-interaction-model.md)
 - [实施计划](docs/implementation-plan.md)
 - [安全边界](docs/security.md)
 - [配置说明](config/README.md)

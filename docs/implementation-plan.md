@@ -16,6 +16,7 @@
 - `docs/project-charter.md` 项目章程。
 - `docs/mvp-plan.md` MVP 方案。
 - `docs/architecture.md` 架构说明。
+- `docs/feishu-interaction-model.md` 飞书交互模型。
 - `docs/security.md` 安全边界。
 - `config/.env.example` 配置模板。
 
@@ -24,6 +25,7 @@ Done 标准：
 - 仓库不包含真实凭据。
 - 文档明确 app-server 主路线。
 - 文档明确第一阶段不开放 WebSocket。
+- 文档明确飞书卡片持续更新和 footer 复用边界。
 
 ## M1 Bridge 工程骨架
 
@@ -72,13 +74,16 @@ Done 标准：
 - 解析私聊文本消息。
 - 白名单用户校验。
 - 调用 Codex turn。
-- 回传最终文本。
+- 创建任务卡片。
+- 将 running / completed / failed 状态更新到同一张卡片。
+- 回传最终文本到卡片正文。
 
 Done 标准：
 
 - 白名单用户可从飞书收到 Codex 回复。
 - 非白名单用户收到无权限提示。
 - 非文本消息收到暂不支持提示。
+- 同一任务优先更新同一张飞书卡片，而不是刷屏式发送多条消息。
 
 ## M4 稳定性和可观测性
 

@@ -19,7 +19,7 @@
   -> thread/start 或 thread/resume
   -> turn/start
   -> streamed agent events
-  -> 飞书进度提示和最终回复
+  -> 飞书任务卡片持续更新和最终回复
 ```
 
 ## MVP 范围
@@ -31,7 +31,7 @@
 - 第一阶段使用 `stdio://` 传输，不开放远程 WebSocket 监听。
 - 为每个飞书用户维护基础 thread 映射。
 - 将用户消息转成 `turn/start` 输入。
-- 读取 app-server 事件流，聚合最终回答并回传飞书。
+- 读取 app-server 事件流，聚合运行状态和最终回答，并更新飞书任务卡片。
 - 记录基础任务日志：飞书 `message_id`、`open_id`、Codex `thread_id`、`turn_id`、工作目录、状态和错误摘要。
 
 ## 明确不做
@@ -97,10 +97,12 @@ Bridge 侧需要封装一个 Codex client，负责：
 - 实现 JSON-RPC 请求、响应和通知分发。
 - 完成 `initialize`、`thread/start`、`turn/start` 最小链路。
 
-### M3 消息回传
+### M3 飞书任务卡片回传
 
 - 聚合 Codex 流式事件。
-- 回传最终文本结果。
+- 创建任务卡片。
+- 将 running / completed / failed 状态更新到同一张卡片。
+- 将最终文本结果写入卡片正文。
 - 对长输出做分段策略预留。
 
 ### M4 状态和错误治理
@@ -121,4 +123,4 @@ Bridge 侧需要封装一个 Codex client，负责：
 - Bridge 实现语言：Node.js 更贴近 app-server quickstart 和飞书 SDK 生态；Python 更利于后续脚本化和本机运维。
 - thread 映射存储：第一阶段可用本地 JSON 或 SQLite，长期建议 SQLite。
 - 运行目录策略：是否只允许 `F:\development` 下白名单项目。
-- 飞书消息更新策略：第一阶段只发最终回复，还是增加“已收到 / 执行中 / 完成”三段提示。
+- 飞书消息更新策略：第一阶段采用任务卡片，并至少支持 running / completed / failed 三态更新。

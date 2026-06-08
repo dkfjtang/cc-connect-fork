@@ -27,7 +27,8 @@ fca 是飞书到本地 Codex 的桥接服务。它不替代 Codex，也不把本
 - 连接飞书长连接。
 - 接收 `im.message.receive_v1`。
 - 解析 `open_id`、`chat_id`、`message_id` 和文本内容。
-- 发送飞书文本回复。
+- 发送飞书文本回复或任务卡片。
+- 更新已发送的任务卡片。
 
 ### Policy Guard
 
@@ -53,8 +54,8 @@ fca 是飞书到本地 Codex 的桥接服务。它不替代 Codex，也不把本
 ### Message Renderer
 
 - 将 Codex 运行状态转成飞书用户能理解的消息。
-- 第一阶段优先回传最终结果。
-- 后续支持进度消息、分段回复和交互卡片。
+- 第一阶段优先使用同一张任务卡片承载 queued、running、completed 和 failed 状态。
+- 后续支持审批卡片、分段回复和更丰富的卡片组件。
 
 ## 数据流
 
