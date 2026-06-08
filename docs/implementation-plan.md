@@ -142,6 +142,7 @@ Done 标准：
 - Thread Store 默认继续使用 JSON 文件，并已支持 `FCA_THREAD_STORE_DRIVER=sqlite` 的可选 SQLite 后端。
 - `npm run migrate:thread-store` 已提供 JSON thread store 到 SQLite 的 dry-run 和迁移能力。
 - 飞书 `状态` / `/status` 控制命令已走 active task 快路径，绕过同会话队列刷新当前任务卡片，不新建 Codex turn。
+- 飞书 `/cwd` / `cwd` 控制命令已先接入安全占位：不启动 Codex turn、不切换目录、不回显用户输入路径，只返回固定暂不支持提示；后续真实切换必须接 `FCA_ALLOWED_WORKDIRS` 白名单。
 
 ## M5 下一阶段评估
 

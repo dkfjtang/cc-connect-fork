@@ -507,6 +507,54 @@ test("handleMessageReceive uses status fast path without waiting for queued chat
   await first;
 });
 
+test("handleMessageReceive replies cwd unsupported notice without starting a turn", async () => {
+  const notices = [];
+  const handler = new FeishuEventHandler({
+    runtime: {
+      handleTextMessage: async () => {
+        throw new Error("should not start Codex turn for cwd command");
+      },
+    },
+    unsupportedMessageClient: {
+      sendTextMessage: async (message) => {
+        notices.push(message);
+      },
+    },
+  });
+
+  const result = await handler.handleMessageReceive(
+    textPayload({
+      messageId: "om_cwd",
+      chatId: "oc_123",
+      text: "/cwd F:\\development\\secret-project",
+    }),
+  );
+
+  assert.deepEqual(result, { status: "handled", reason: "Cwd command is not supported" });
+  assert.deepEqual(notices, [
+    {
+      chatId: "oc_123",
+      text: "暂不支持在飞书内切换工作目录。当前版本只使用已配置的默认工作目录；后续开放 /cwd 时会先经过工作目录白名单校验。",
+    },
+  ]);
+  assert.equal(JSON.stringify(notices).includes("secret-project"), false);
+});
+
+test("handleMessageReceive skips cwd command when notice sender is unavailable", async () => {
+  const handler = new FeishuEventHandler({
+    runtime: {
+      handleTextMessage: async () => {
+        throw new Error("should not start Codex turn for cwd command");
+      },
+    },
+  });
+
+  assert.deepEqual(
+    await handler.handleMessageReceive(textPayload({ messageId: "om_cwd", text: "/cwd" })),
+    { status: "skipped", reason: "Cwd command is not supported" },
+  );
+});
+
 test("handleMessageReceive skips duplicate message ids", async () => {
   let calls = 0;
   const handler = new FeishuEventHandler({

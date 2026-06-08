@@ -109,6 +109,10 @@ export class FeishuEventHandler {
       });
     }
 
+    if (isCwdText(message.text)) {
+      return this.#handleUnsupportedCwdCommand(message.chatId);
+    }
+
     return this.#enqueue(message.chatId, async () => {
       const task = await this.#runtime.handleTextMessage(message);
       return {
@@ -184,6 +188,19 @@ export class FeishuEventHandler {
     });
 
     return { status: "handled", reason: "Unsupported Feishu message type notified" };
+  }
+
+  async #handleUnsupportedCwdCommand(chatId) {
+    if (!this.#unsupportedMessageClient?.sendTextMessage) {
+      return { status: "skipped", reason: "Cwd command is not supported" };
+    }
+
+    await this.#unsupportedMessageClient.sendTextMessage({
+      chatId,
+      text: "暂不支持在飞书内切换工作目录。当前版本只使用已配置的默认工作目录；后续开放 /cwd 时会先经过工作目录白名单校验。",
+    });
+
+    return { status: "handled", reason: "Cwd command is not supported" };
   }
 
   #precheck(payload) {
@@ -290,6 +307,10 @@ function isCancelText(text) {
 
 function isStatusText(text) {
   return /^(状态|查询状态|任务状态|当前状态|\/status|status|task status)$/i.test(text.trim());
+}
+
+function isCwdText(text) {
+  return /^(\/cwd|cwd)(\s+.*)?$/i.test(text.trim());
 }
 
 function mapGroupSenderOpenIds(policy) {
