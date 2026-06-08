@@ -197,6 +197,7 @@ MVP 策略：
 当前已完成最小闭环：Bridge 可识别 `item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`、`applyPatchApproval` 和 `execCommandApproval`，并把飞书按钮选择回写为 app-server approval response。超时或无人处理时仍默认安全拒绝。
 
 审批结果必须回写 Codex app-server，而不是只更新飞书卡片。
+审批按钮操作者必须命中全局 `open_id` 白名单；如果该群配置了 `FCA_GROUP_SENDER_OPEN_IDS`，还必须命中该群 sender allowlist。
 审批处理会写结构化日志，包括 requested、resolved 和 timeout 事件，日志只包含脱敏 approval id / item id / decision。
 审批正文和日志不得展示命令正文、diff、完整路径、搜索词、reason 原文或 raw payload。
 

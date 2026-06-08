@@ -608,6 +608,34 @@ test("handleCardAction forwards approval action to runtime", async () => {
   ]);
 });
 
+test("handleCardAction skips approval action when sender is not allowed for group", async () => {
+  const handler = new FeishuEventHandler({
+    groupSenderOpenIds: { oc_group: ["ou_allowed"] },
+    runtime: {
+      resolveApproval: async () => {
+        throw new Error("should not approve from denied group sender");
+      },
+    },
+  });
+
+  const result = await handler.handleCardAction({
+    event: {
+      operator: { open_id: "ou_denied" },
+      context: { open_chat_id: "oc_group", open_message_id: "om_123" },
+      action: {
+        value: {
+          fcaAction: "approval.resolve",
+          decision: "accept",
+          taskId: "task_123",
+          requestId: 7,
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(result, { status: "skipped", reason: "Feishu group sender is not allowed" });
+});
+
 test("handleCardAction skips unsupported card actions", async () => {
   const handler = new FeishuEventHandler({
     runtime: {

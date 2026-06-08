@@ -60,6 +60,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | 取消快路径 | 用户发送停止文本时快速中断当前任务 | 已支持取消文本识别、cancelled 卡片和 `turn/interrupt` |
 | 状态查询快路径 | 用户查询当前任务时刷新已有卡片，不打断长任务 | 已支持状态文本识别，并绕过同 chat 队列刷新 active task 卡片 |
 | 长连接可观测性 | WebSocket 启动、入站事件、dispatch 失败进入日志 | 已记录 WS 启动阶段、事件收到和 handler 失败的 JSONL 日志 |
+| 审批按钮权限 | 交互卡片操作也要受账号和群策略约束 | 已要求审批操作者命中全局 `open_id` 白名单；配置群 sender allowlist 时，按钮操作者也必须命中该群策略 |
 
 ## 近期差距
 
@@ -128,7 +129,7 @@ fca 映射：
 
 - 仅 `chat_type=group` 且文本内容的 `mentions` 包含当前 bot `open_id` 时进入任务链路。
 - 如果配置了 `FCA_ALLOWED_GROUP_CHAT_IDS`，群聊 `chat_id` 必须命中该 allowlist；留空则保持群 @ 入口兼容，不额外限制群。
-- 如果配置了 `FCA_GROUP_SENDER_OPEN_IDS`，指定群内发送者 `open_id` 还必须命中该群 sender allowlist；留空或未配置该群时不额外收紧。
+- 如果配置了 `FCA_GROUP_SENDER_OPEN_IDS`，指定群内发送者 `open_id` 和审批按钮操作者还必须命中该群 sender allowlist；留空或未配置该群时不额外收紧。
 - 如果配置了 `FCA_GROUP_DEVELOPER_INSTRUCTIONS`，该群的 Codex turn 会通过 app-server `developer_instructions` 接收群级上下文；私聊不受影响。
 - 解析时会移除 mention key，只把用户真实任务文本交给 Codex。
 - 普通群聊文本继续跳过，不作为后台触发命令。

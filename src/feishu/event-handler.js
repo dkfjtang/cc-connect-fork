@@ -114,6 +114,10 @@ export class FeishuEventHandler {
       throw error;
     }
 
+    if (!this.#canUseGroupActionSender(action)) {
+      return { status: "skipped", reason: "Feishu group sender is not allowed" };
+    }
+
     if (typeof this.#runtime.resolveApproval !== "function") {
       return { status: "skipped", reason: "Approval actions are not supported" };
     }
@@ -189,6 +193,15 @@ export class FeishuEventHandler {
     }
 
     return allowedOpenIds.has(message.openId);
+  }
+
+  #canUseGroupActionSender(action) {
+    const allowedOpenIds = this.#groupSenderOpenIds.get(action.chatId);
+    if (!allowedOpenIds) {
+      return true;
+    }
+
+    return allowedOpenIds.has(action.openId);
   }
 }
 
