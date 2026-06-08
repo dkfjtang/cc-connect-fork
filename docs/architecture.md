@@ -50,6 +50,7 @@ fca 是飞书到本地 Codex 的桥接服务。它不替代 Codex，也不把本
 - 完成 `initialize`、`thread/start`、`thread/resume`、`turn/start`。
 - 读取并分发 app-server notification。
 - 处理超时、断线和 turn 失败。
+- 将 Codex thread、turn、item 和 delta 映射到 fca runtime task。
 
 ### Message Renderer
 

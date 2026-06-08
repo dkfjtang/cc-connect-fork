@@ -17,6 +17,7 @@
 - `docs/mvp-plan.md` MVP 方案。
 - `docs/architecture.md` 架构说明。
 - `docs/feishu-interaction-model.md` 飞书交互模型。
+- `docs/codex-app-server-adapter.md` Codex app-server 适配层。
 - `docs/security.md` 安全边界。
 - `config/.env.example` 配置模板。
 
@@ -59,6 +60,7 @@ Done 标准：
 - 创建 thread。
 - 发起 turn。
 - 聚合最终文本输出。
+- 将 app-server notification 翻译为 runtime task 状态。
 
 Done 标准：
 
