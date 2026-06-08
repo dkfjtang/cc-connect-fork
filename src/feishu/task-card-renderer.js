@@ -31,6 +31,7 @@ export function renderTaskCard(snapshot) {
           content: cardBody(snapshot),
         },
       },
+      ...approvalActionElements(snapshot),
       {
         tag: "hr",
       },
@@ -44,6 +45,45 @@ export function renderTaskCard(snapshot) {
         ],
       },
     ],
+  };
+}
+
+function approvalActionElements(snapshot) {
+  if (snapshot.status !== "waiting_approval" || snapshot.approval?.status !== "pending") {
+    return [];
+  }
+
+  const value = {
+    fcaAction: "approval.resolve",
+    taskId: snapshot.taskId,
+    requestId: snapshot.approval.requestId,
+    approvalId: snapshot.approval.approvalId,
+    itemId: snapshot.approval.itemId,
+    chatId: snapshot.feishuChatId,
+  };
+
+  return [
+    {
+      tag: "action",
+      actions: [
+        approvalButton("允许一次", "primary", { ...value, decision: "accept" }),
+        approvalButton("本会话允许", "default", { ...value, decision: "acceptForSession" }),
+        approvalButton("拒绝", "danger", { ...value, decision: "decline" }),
+        approvalButton("停止", "default", { ...value, decision: "cancel" }),
+      ],
+    },
+  ];
+}
+
+function approvalButton(content, type, value) {
+  return {
+    tag: "button",
+    text: {
+      tag: "plain_text",
+      content,
+    },
+    type,
+    value,
   };
 }
 

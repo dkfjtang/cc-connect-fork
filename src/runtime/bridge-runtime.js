@@ -14,6 +14,8 @@ export class BridgeRuntime {
   #appVersion;
   #groupDeveloperInstructions;
   #activeTasks = new Map();
+  #pendingApprovals = new Map();
+  #approvalTimeoutMs;
 
   constructor({
     policy,
@@ -22,6 +24,7 @@ export class BridgeRuntime {
     cardController,
     turnTimeoutMs = 900_000,
     runningUpdateThrottleMs = 3000,
+    approvalTimeoutMs = 300_000,
     now = () => Date.now(),
     setTimeoutFn = (callback, delay) => setTimeout(callback, delay),
     clearTimeoutFn = (timer) => clearTimeout(timer),
@@ -36,6 +39,7 @@ export class BridgeRuntime {
     this.#cardController = cardController;
     this.turnTimeoutMs = turnTimeoutMs;
     this.#runningUpdateThrottleMs = runningUpdateThrottleMs;
+    this.#approvalTimeoutMs = approvalTimeoutMs;
     this.#now = now;
     this.#setTimeout = setTimeoutFn;
     this.#clearTimeout = clearTimeoutFn;
@@ -46,6 +50,10 @@ export class BridgeRuntime {
       info: () => {},
       error: () => {},
     };
+
+    if (typeof this.#session.onRequest === "function") {
+      this.#session.onRequest((request) => this.#handleServerRequest(request));
+    }
   }
 
   async handleTextMessage({ messageId, openId, chatId, chatType = null, text }) {
@@ -166,6 +174,7 @@ export class BridgeRuntime {
     const snapshot = activeTask.task.snapshot();
     activeTask.cancelled = true;
     activeTask.task.cancel(reason);
+    this.#finishApproval(this.#findPendingApproval({ taskId: snapshot.taskId }), "cancel");
     activeTask.runningUpdates?.cancel();
 
     if (snapshot.threadId && snapshot.turnId && typeof this.#session.interruptTurn === "function") {
@@ -183,6 +192,120 @@ export class BridgeRuntime {
     activeTask.resolveCancellation?.();
 
     return { status: "cancelled", taskStatus: "cancelled" };
+  }
+
+  async resolveApproval({ openId = null, decision, taskId = null, requestId = null, approvalId = null, itemId = null }) {
+    if (!openId) {
+      return { status: "skipped", reason: "Feishu operator open_id is required" };
+    }
+    if (!this.#policy.canUseOpenId(openId)) {
+      return { status: "skipped", reason: "Feishu user is not allowed" };
+    }
+    if (!isApprovalDecision(decision)) {
+      return { status: "skipped", reason: "Unsupported approval decision" };
+    }
+
+    const pending = this.#findPendingApproval({ taskId, requestId, approvalId, itemId });
+    if (!pending) {
+      return { status: "skipped", reason: "No pending approval" };
+    }
+
+    this.#finishApproval(pending, decision);
+    await this.#cardController.sync(pending.task);
+
+    return {
+      status: "handled",
+      decision,
+      taskStatus: pending.task.snapshot().status,
+    };
+  }
+
+  #handleServerRequest(request) {
+    if (!isApprovalRequest(request.method)) {
+      throw new Error(`Unsupported server request: ${request.method}`);
+    }
+
+    const activeTask = this.#findActiveTaskForApproval(request);
+    if (!activeTask) {
+      return { decision: "decline" };
+    }
+
+    return this.#waitForApproval(activeTask.task, request);
+  }
+
+  #waitForApproval(task, request) {
+    let pending;
+    const result = new Promise((resolve) => {
+      pending = {
+        task,
+        request,
+        resolve,
+        keys: approvalKeys({ taskId: task.snapshot().taskId, request }),
+        timer: null,
+      };
+      pending.timer = this.#setTimeout(() => {
+        this.#finishApproval(pending, "decline");
+      }, this.#approvalTimeoutMs);
+
+      for (const key of pending.keys) {
+        this.#pendingApprovals.set(key, pending);
+      }
+    });
+
+    return result;
+  }
+
+  #finishApproval(pending, decision) {
+    if (!pending || pending.resolved) {
+      return;
+    }
+
+    pending.resolved = true;
+    if (pending.timer) {
+      this.#clearTimeout(pending.timer);
+    }
+    for (const key of pending.keys) {
+      if (this.#pendingApprovals.get(key) === pending) {
+        this.#pendingApprovals.delete(key);
+      }
+    }
+
+    pending.task.resolveApproval(decision);
+    pending.resolve({ decision });
+  }
+
+  #findPendingApproval({ taskId = null, requestId = null, approvalId = null, itemId = null }) {
+    const keys = [
+      requestId !== null && requestId !== undefined ? `request:${requestId}` : null,
+      approvalId ? `approval:${approvalId}` : null,
+      itemId ? `item:${itemId}` : null,
+      taskId ? `task:${taskId}` : null,
+    ].filter(Boolean);
+
+    for (const key of keys) {
+      const pending = this.#pendingApprovals.get(key);
+      if (pending) {
+        return pending;
+      }
+    }
+
+    return null;
+  }
+
+  #findActiveTaskForApproval(request) {
+    const params = request.params ?? {};
+    for (const activeTask of this.#activeTasks.values()) {
+      const snapshot = activeTask.task.snapshot();
+      if (params.threadId && snapshot.threadId && params.threadId !== snapshot.threadId) {
+        continue;
+      }
+      if (params.turnId && snapshot.turnId && params.turnId !== snapshot.turnId) {
+        continue;
+      }
+      return activeTask;
+    }
+
+    return null;
   }
 
   #waitForTurnCompletion(task, runningUpdates, cancellation) {
@@ -308,6 +431,33 @@ function shouldScheduleRunningUpdate(method) {
     "applyPatchApproval",
     "execCommandApproval",
   ].includes(method);
+}
+
+function isApprovalRequest(method) {
+  return [
+    "item/commandExecution/requestApproval",
+    "item/fileChange/requestApproval",
+    "item/permissions/requestApproval",
+    "applyPatchApproval",
+    "execCommandApproval",
+  ].includes(method);
+}
+
+function isApprovalDecision(decision) {
+  return ["accept", "acceptForSession", "decline", "cancel"].includes(decision);
+}
+
+function approvalKeys({ taskId, request }) {
+  const params = request.params ?? {};
+  return [
+    request.id !== null && request.id !== undefined ? `request:${request.id}` : null,
+    params.approvalId ? `approval:${params.approvalId}` : null,
+    params.callId ? `approval:${params.callId}` : null,
+    params.itemId ? `approval:${params.itemId}` : null,
+    params.itemId ? `item:${params.itemId}` : null,
+    params.callId ? `item:${params.callId}` : null,
+    taskId ? `task:${taskId}` : null,
+  ].filter(Boolean);
 }
 
 function tokenUsageLogFields(tokenUsage) {

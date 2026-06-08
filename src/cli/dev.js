@@ -54,6 +54,7 @@ export async function runDev({
   output.write("fca bridge app started. Listening for Feishu message events.\n");
   await feishuTransport.startMessageListener({
     onMessageReceive: (payload) => app.eventHandler.handleMessageReceive(payload),
+    onCardAction: (payload) => app.eventHandler.handleCardAction(payload),
   });
   return 0;
 }

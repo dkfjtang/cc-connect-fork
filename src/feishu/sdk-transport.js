@@ -89,9 +89,12 @@ export class FeishuSdkTransport {
     }
   }
 
-  async startMessageListener({ onMessageReceive }) {
+  async startMessageListener({ onMessageReceive, onCardAction = async () => {} }) {
     if (typeof onMessageReceive !== "function") {
       throw new TypeError("startMessageListener requires onMessageReceive");
+    }
+    if (typeof onCardAction !== "function") {
+      throw new TypeError("startMessageListener requires onCardAction");
     }
 
     const dispatcher = await this.#createEventDispatcher({
@@ -106,7 +109,7 @@ export class FeishuSdkTransport {
       "im.chat.access_event.bot_p2p_chat_entered_v1": async () => {},
       "im.chat.member.bot.added_v1": async () => {},
       "im.chat.member.bot.deleted_v1": async () => {},
-      "card.action.trigger": async () => {},
+      "card.action.trigger": onCardAction,
     });
 
     const wsClient = await this.#createWsClient({

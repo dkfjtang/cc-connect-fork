@@ -2,6 +2,10 @@ import {
   parseMessageReceiveEvent,
   UnsupportedFeishuEventError,
 } from "./message-event-parser.js";
+import {
+  parseCardActionEvent,
+  UnsupportedFeishuCardActionError,
+} from "./card-action-parser.js";
 
 export class FeishuEventHandler {
   #runtime;
@@ -84,6 +88,29 @@ export class FeishuEventHandler {
     });
   }
 
+  async handleCardAction(payload) {
+    const precheck = this.#precheck(payload);
+    if (precheck) {
+      return precheck;
+    }
+
+    let action;
+    try {
+      action = parseCardActionEvent(payload);
+    } catch (error) {
+      if (error instanceof UnsupportedFeishuCardActionError) {
+        return { status: "skipped", reason: error.message };
+      }
+      throw error;
+    }
+
+    if (typeof this.#runtime.resolveApproval !== "function") {
+      return { status: "skipped", reason: "Approval actions are not supported" };
+    }
+
+    return this.#runtime.resolveApproval(action);
+  }
+
   async #hasSeenMessage(messageId) {
     return (await this.#messageDedupStore?.has(messageId)) ?? false;
   }
@@ -98,7 +125,10 @@ export class FeishuEventHandler {
       return { status: "skipped", reason: "Feishu app_id mismatch" };
     }
 
-    const senderOpenId = payload?.event?.sender?.sender_id?.open_id;
+    const senderOpenId =
+      payload?.event?.sender?.sender_id?.open_id ??
+      payload?.event?.operator?.open_id ??
+      payload?.event?.operator?.operator_id?.open_id;
     if (this.#botOpenId && senderOpenId && senderOpenId === this.#botOpenId) {
       return { status: "skipped", reason: "Self-echo Feishu message" };
     }

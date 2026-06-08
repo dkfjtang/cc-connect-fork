@@ -64,6 +64,22 @@ export class RuntimeTask {
     this.#completedAt = this.#now();
   }
 
+  resolveApproval(decision) {
+    if (!this.#approval || this.#approval.status !== "pending") {
+      return;
+    }
+
+    this.#approval = {
+      ...this.#approval,
+      status: approvalDecisionStatus(decision),
+      summary: approvalDecisionSummary(decision),
+    };
+
+    if (decision === "accept" || decision === "acceptForSession") {
+      this.#status = "running";
+    }
+  }
+
   handleCodexEvent(event) {
     if (this.#status === "cancelled") {
       return;
@@ -244,6 +260,36 @@ function approvalSummary(method) {
       return "Codex 请求额外权限，需要审批。";
     default:
       return "Codex 请求审批。";
+  }
+}
+
+function approvalDecisionStatus(decision) {
+  switch (decision) {
+    case "accept":
+      return "accepted";
+    case "acceptForSession":
+      return "accepted_for_session";
+    case "decline":
+      return "declined";
+    case "cancel":
+      return "cancelled";
+    default:
+      return "resolved";
+  }
+}
+
+function approvalDecisionSummary(decision) {
+  switch (decision) {
+    case "accept":
+      return "已允许本次操作，等待 Codex 继续执行。";
+    case "acceptForSession":
+      return "已允许本会话同类操作，等待 Codex 继续执行。";
+    case "decline":
+      return "已拒绝本次操作，等待 Codex 收尾。";
+    case "cancel":
+      return "已停止本次操作，等待 Codex 收尾。";
+    default:
+      return "审批已处理，等待 Codex 继续。";
   }
 }
 

@@ -429,6 +429,201 @@ test("handleTextMessage schedules waiting approval card update", async () => {
   assert.deepEqual(syncStatuses.slice(0, 2), ["queued", "waiting_approval"]);
 });
 
+test("resolveApproval answers pending app-server approval request", async () => {
+  let emitEvent;
+  let requestHandler;
+  let markEventReady;
+  const eventReady = new Promise((resolve) => {
+    markEventReady = resolve;
+  });
+  const syncSnapshots = [];
+  let approvalTimer;
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession({
+      onEvent: (handler) => {
+        emitEvent = handler;
+        markEventReady();
+        return () => {};
+      },
+      onRequest: (handler) => {
+        requestHandler = handler;
+        return () => {};
+      },
+      startTurnHook: () => {},
+    }),
+    cardController: {
+      sync: async (task) => {
+        syncSnapshots.push(task.snapshot());
+        task.attachCard("om_123");
+      },
+    },
+    approvalTimeoutMs: 1000,
+    setTimeoutFn: (callback, delay) => {
+      approvalTimer = { callback, delay };
+      return "approval-timer";
+    },
+    clearTimeoutFn: () => {
+      approvalTimer = null;
+    },
+  });
+
+  const pendingTask = runtime.handleTextMessage({
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_123",
+    text: "hello",
+  });
+  await eventReady;
+  await Promise.resolve();
+
+  const approvalEvent = {
+    id: 7,
+    method: "item/commandExecution/requestApproval",
+    params: {
+      approvalId: "approval_123",
+      itemId: "item_123",
+      threadId: "thr_new",
+      turnId: "turn_new",
+      command: "cat secret.txt",
+    },
+  };
+  emitEvent({
+    method: approvalEvent.method,
+    params: approvalEvent.params,
+    requestId: approvalEvent.id,
+    serverRequest: true,
+  });
+  const approvalResponse = requestHandler(approvalEvent);
+
+  const result = await runtime.resolveApproval({
+    openId: "ou_allowed",
+    decision: "accept",
+    taskId: "msg_123",
+    requestId: 7,
+    approvalId: "approval_123",
+  });
+
+  assert.deepEqual(result, { status: "handled", decision: "accept", taskStatus: "running" });
+  assert.deepEqual(await approvalResponse, { decision: "accept" });
+  assert.equal(approvalTimer, null);
+  assert.equal(syncSnapshots.at(-1).approval.status, "accepted");
+  assert.equal(JSON.stringify(syncSnapshots.at(-1).approval).includes("secret.txt"), false);
+
+  emitEvent({ method: "turn/completed", params: { status: "success" } });
+  await pendingTask;
+});
+
+test("approval request safely declines when it times out", async () => {
+  let emitEvent;
+  let requestHandler;
+  let markEventReady;
+  const eventReady = new Promise((resolve) => {
+    markEventReady = resolve;
+  });
+  let approvalTimer;
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession({
+      onEvent: (handler) => {
+        emitEvent = handler;
+        markEventReady();
+        return () => {};
+      },
+      onRequest: (handler) => {
+        requestHandler = handler;
+        return () => {};
+      },
+      startTurnHook: () => {},
+    }),
+    cardController: fakeCardController(),
+    approvalTimeoutMs: 1000,
+    setTimeoutFn: (callback, delay) => {
+      approvalTimer = { callback, delay };
+      return "approval-timer";
+    },
+    clearTimeoutFn: () => {},
+  });
+
+  const pendingTask = runtime.handleTextMessage({
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_123",
+    text: "hello",
+  });
+  await eventReady;
+  await Promise.resolve();
+
+  const approvalEvent = {
+    id: 7,
+    method: "item/fileChange/requestApproval",
+    params: { approvalId: "approval_123", itemId: "item_123", threadId: "thr_new", turnId: "turn_new" },
+  };
+  emitEvent({
+    method: approvalEvent.method,
+    params: approvalEvent.params,
+    requestId: approvalEvent.id,
+    serverRequest: true,
+  });
+  const approvalResponse = requestHandler(approvalEvent);
+
+  assert.equal(approvalTimer.delay, 1000);
+  approvalTimer.callback();
+
+  assert.deepEqual(await approvalResponse, { decision: "decline" });
+  assert.deepEqual(
+    await runtime.resolveApproval({
+      openId: "ou_allowed",
+      decision: "accept",
+      taskId: "msg_123",
+      requestId: 7,
+    }),
+    { status: "skipped", reason: "No pending approval" },
+  );
+
+  emitEvent({ method: "turn/completed", params: { status: "failed", error: { message: "denied" } } });
+  await pendingTask;
+});
+
+test("resolveApproval rejects approval action without operator open id", async () => {
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession(),
+    cardController: fakeCardController(),
+  });
+
+  assert.deepEqual(
+    await runtime.resolveApproval({
+      decision: "accept",
+      taskId: "msg_123",
+      requestId: 7,
+    }),
+    { status: "skipped", reason: "Feishu operator open_id is required" },
+  );
+});
+
+test("resolveApproval rejects approval action from non-whitelisted user", async () => {
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession(),
+    cardController: fakeCardController(),
+  });
+
+  assert.deepEqual(
+    await runtime.resolveApproval({
+      openId: "ou_denied",
+      decision: "accept",
+      taskId: "msg_123",
+      requestId: 7,
+    }),
+    { status: "skipped", reason: "Feishu user is not allowed" },
+  );
+});
+
 test("handleTextMessage keeps turn alive when a running card update fails", async () => {
   let emitEvent;
   let markEventReady;
@@ -927,13 +1122,14 @@ function fakeLogger(entries) {
   };
 }
 
-function fakeSession({ calls = [], onEvent, startTurnHook, interruptTurn } = {}) {
+function fakeSession({ calls = [], onEvent, onRequest, startTurnHook, interruptTurn } = {}) {
   let eventHandler = () => {};
   return {
     onEvent: (handler) => {
       eventHandler = handler;
       return onEvent ? onEvent(handler) : () => {};
     },
+    onRequest: (handler) => (onRequest ? onRequest(handler) : () => {}),
     startThread: async (options = {}) => {
       calls.push({ method: "startThread", options });
       return { thread: { id: "thr_new" } };

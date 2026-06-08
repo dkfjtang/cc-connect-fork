@@ -28,7 +28,7 @@
 - 支持 Codex 最终文本结果回传飞书。
 - 建立 `chat_id/open_id` 到本地任务上下文的基础映射。
 - 默认只使用受控工作目录。
-- 为后续文件、审批和长会话能力预留接口。
+- 支持 Codex approval request 通过飞书按钮回写允许/拒绝/停止，超时默认安全拒绝。
 
 ## 安全边界
 
@@ -52,7 +52,7 @@
 npm test
 ```
 
-当前测试覆盖 Codex JSON-RPC client、app-server session、JSON-RPC server request 分发、approval request 默认安全拒绝、stdio JSONL channel、app-server 子进程封装、streamed delta 输出聚合、阶段状态展示、token usage footer/logging、运行态状态转换、会话维度 thread 映射、JSON/SQLite thread store、thread store 迁移、配置解析、访问策略、飞书私聊/群聊 @ 文本事件解析、飞书任务卡片渲染、卡片发送/更新动作、文本编排和 smoke CLI 参数。
+当前测试覆盖 Codex JSON-RPC client、app-server session、JSON-RPC server request 分发、approval request 默认安全拒绝、飞书 approval 按钮回调、stdio JSONL channel、app-server 子进程封装、streamed delta 输出聚合、阶段状态展示、token usage footer/logging、运行态状态转换、会话维度 thread 映射、JSON/SQLite thread store、thread store 迁移、配置解析、访问策略、飞书私聊/群聊 @ 文本事件解析、飞书任务卡片渲染、卡片发送/更新动作、文本编排和 smoke CLI 参数。
 
 ## 常用脚本
 

@@ -21,7 +21,7 @@ fca 可以高度复用 OpenClaw 类飞书插件的交互体验，但不应完全
 - 长连接事件接入：Bridge 通过飞书 SDK 建立 WebSocket 长连接接收事件。
 - 发送文本或卡片消息：Bridge 可主动向用户回复任务状态。
 - 更新已发送卡片：Bridge 可先发任务卡片，再持续更新同一张卡片。
-- 卡片交互回调：后续审批、取消、继续执行可以通过卡片按钮触发。
+- 卡片交互回调：审批允许/拒绝/停止通过卡片按钮触发。
 - 卡片 JSON 2.0：后续可承载更丰富的布局、状态和流式更新体验。
 
 参考文档：
@@ -74,10 +74,10 @@ fca 可以高度复用 OpenClaw 类飞书插件的交互体验，但不应完全
 
 - 标题：需要确认
 - 正文：Codex approval server request 的脱敏动作摘要和 approval 短 id
-- 操作：允许、拒绝、查看详情
+- 操作：允许一次、本会话允许、拒绝、停止
 - footer：`thread_id`、`turn_id`、approval id
 
-当前阶段已经能把 approval server request 显示为等待审批卡片，但飞书按钮回调尚未接入；无人交互时 app-server 默认收到 `decline`。
+当前阶段已经能把 approval server request 显示为等待审批卡片，并通过 `card.action.trigger` 将按钮选择回写 app-server；无人交互超时后 app-server 默认收到 `decline`。
 
 ### completed
 
@@ -151,7 +151,7 @@ footer 只展示排障有用、但不泄露敏感信息的字段。
 | `item/agentMessage/delta` | 聚合文本 delta，不逐字更新 |
 | `item/completed` | 更新最近完成阶段安全标签 |
 | `thread/tokenUsage/updated` | 更新 footer token / cache / context 指标 |
-| approval server request | 卡片状态改为 waiting_approval，并展示脱敏审批摘要 |
+| approval server request | 卡片状态改为 waiting_approval，展示脱敏审批摘要和审批按钮 |
 | `turn/completed` success | 卡片状态改为 completed |
 | `turn/completed` failure | 卡片状态改为 failed |
 | app-server 断开 | 卡片状态改为 failed |
@@ -173,17 +173,17 @@ MVP 策略：
 
 这样既能体现持续执行，又避免消息 API 频率和用户体验问题。
 
-## 审批卡片预留
+## 审批卡片
 
-后续审批卡片需要承载：
+审批卡片承载：
 
 - 动作类型：命令、写文件、联网、外发文件、切换目录。
-- 影响范围：工作目录、目标文件、目标域名或命令摘要。
-- 风险等级：低、中、高。
-- 选择项：允许一次、拒绝、停止任务。
+- 影响范围：当前最小实现只展示 approval 短 id，后续再加入脱敏范围摘要。
+- 风险等级：后续补充。
+- 选择项：允许一次、本会话允许、拒绝、停止任务。
 - 回调上下文：`thread_id`、`turn_id`、approval id。
 
-当前已完成协议基础：Bridge 可识别 `item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`、`applyPatchApproval` 和 `execCommandApproval`，并默认安全拒绝。下一步才是把飞书按钮选择回写为 app-server approval response。
+当前已完成最小闭环：Bridge 可识别 `item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`、`applyPatchApproval` 和 `execCommandApproval`，并把飞书按钮选择回写为 app-server approval response。超时或无人处理时仍默认安全拒绝。
 
 审批结果必须回写 Codex app-server，而不是只更新飞书卡片。
 
@@ -202,7 +202,7 @@ MVP 策略：
 
 - 任务状态机要从 OpenClaw task 改为 Codex thread / turn。
 - 进度来源要从 OpenClaw 事件改为 Codex app-server notification。
-- 审批按钮要对接 Codex approval 事件。
+- 审批按钮对接 Codex approval server request。
 - 任务取消要对接 Codex turn interrupt。
 
 不能复用：
@@ -237,7 +237,6 @@ MVP 可以先实现：
 
 MVP 暂不实现：
 
-- 审批按钮。
 - 文件卡片。
 - 更复杂的群级配置文件。
 - 复杂 Markdown 渲染。

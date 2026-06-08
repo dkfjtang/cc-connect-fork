@@ -125,7 +125,7 @@ Done 标准：
 - `FCA_CODEX_MODEL` 已贯穿到 Codex `thread/start`、任务 snapshot 和卡片 footer；`FCA_VERSION` 已进入配置检查和 footer。
 - `thread/tokenUsage/updated` 已进入 RuntimeTask snapshot，并在任务卡片 footer 展示 token / cache / context 指标。
 - `item/started` / `item/completed` 已进入 RuntimeTask snapshot，并在运行中卡片正文展示安全阶段标签。
-- app-server JSON-RPC server request 已进入分发层；approval request 会把任务切到 `waiting_approval`、更新脱敏卡片，并在飞书按钮未接入前默认回写 `decline`。
+- app-server JSON-RPC server request 已进入分发层；approval request 会把任务切到 `waiting_approval`、更新脱敏卡片，并通过飞书按钮回写 app-server decision；无人处理超时后默认回写 `decline`。
 - Thread Store 默认继续使用 JSON 文件，并已支持 `FCA_THREAD_STORE_DRIVER=sqlite` 的可选 SQLite 后端。
 - `npm run migrate:thread-store` 已提供 JSON thread store 到 SQLite 的 dry-run 和迁移能力。
 
@@ -142,7 +142,7 @@ Done 标准：
 
 候选能力：
 
-- 飞书交互卡片审批按钮回调和 approval response 选择回写。
+- 审批卡片详情脱敏增强和风险摘要。
 - CardKit 2.0 流式卡片，失败后回退 IM patch。
 - 取消/停止任务快路径。
 - 文件下载和回传。

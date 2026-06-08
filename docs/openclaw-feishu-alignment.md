@@ -69,7 +69,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | P0 | 卡片更新节流 | 已增加 delta 聚合低频 patch 和同一卡片更新队列 |
 | P1 | CardKit 优先、IM patch fallback | MVP 先用 IM card patch，后续增加 CardKit 2.0 |
 | P1 | 群聊策略 | 已完成群聊 @ 最小入口、可选群 `chat_id` allowlist、群内 sender 收紧策略和群级 developer instructions |
-| P1 | 卡片交互审批 | 已完成 Codex approval server request 识别、等待审批卡片和默认安全拒绝；飞书按钮回调待实现 |
+| P1 | 卡片交互审批 | 已完成 Codex approval server request 识别、等待审批卡片、飞书按钮回调和超时默认安全拒绝 |
 | P2 | 文件/图片资源 | 后续作为 Codex 输入附件和输出附件能力规划 |
 | P2 | 文档/多维表/日历/任务工具 | 不属于 fca MVP；只在 Codex 能力需要飞书工具时评估 |
 
@@ -82,7 +82,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | P0 | 持续回复卡片更新、节流和最终态兜底 | 已实现 running 节流、阶段标签更新、同一卡片互斥 flush、基础发送/更新重试和最终态更新；后续补更细的错误分类退避策略 |
 | P0 | 卡片 footer 的状态、会话和排障字段 | 已展示 status / thread / turn / elapsed / token / cache / context / model / fca version / error type / cwd |
 | P1 | 群聊 @、群配置和发送者策略 | 已实现 @ 触发、可选群 `chat_id` allowlist、全局发送者 `open_id` 白名单、群内 sender 收紧策略和群级 developer instructions |
-| P1 | 敏感操作确认卡片 | 已映射到 Codex approval server request，并保留脱敏摘要；不复用 OpenClaw tool approval 内核，按钮回写后续实现 |
+| P1 | 敏感操作确认卡片 | 已映射到 Codex approval server request，并保留脱敏摘要；不复用 OpenClaw tool approval 内核，后续增强风险摘要和详情展示 |
 | P1 | CardKit 2.0 与普通卡片降级 | 先保留 IM patch；后续实现 CardKit 优先、IM patch fallback |
 
 ## 事件入口对齐

@@ -129,6 +129,7 @@ test("startMessageListener registers receive handler and starts WS client", asyn
     }
   }
   const messages = [];
+  const cardActions = [];
   const transport = new FeishuSdkTransport({
     appId: "cli_123",
     appSecret: "secret",
@@ -146,8 +147,12 @@ test("startMessageListener registers receive handler and starts WS client", asyn
     onMessageReceive: async (payload) => {
       messages.push(payload);
     },
+    onCardAction: async (payload) => {
+      cardActions.push(payload);
+    },
   });
   await registeredHandlers["im.message.receive_v1"]({ event: { message: { message_id: "om_123" } } });
+  await registeredHandlers["card.action.trigger"]({ event: { action: { value: { fcaAction: "approval.resolve" } } } });
 
   assert.equal(calls[0].type, "dispatcher");
   assert.deepEqual(calls[0].options, {
@@ -163,6 +168,7 @@ test("startMessageListener registers receive handler and starts WS client", asyn
   assert.equal(calls[3].type, "start");
   assert.equal(calls[3].options.eventDispatcher, dispatcher);
   assert.deepEqual(messages, [{ event: { message: { message_id: "om_123" } } }]);
+  assert.deepEqual(cardActions, [{ event: { action: { value: { fcaAction: "approval.resolve" } } } }]);
 });
 
 test("constructor requires app credentials", () => {

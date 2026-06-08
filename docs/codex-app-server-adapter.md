@@ -160,7 +160,7 @@ request_id -> resolver
 | `item/agentMessage/delta` | 追加到 output buffer | 节流更新卡片正文摘要 |
 | `item/completed` | 记录 item 完成 | 更新最近阶段安全标签 |
 | `thread/tokenUsage/updated` | 记录 token usage | 更新 footer 的 tokens / cache / context 指标 |
-| approval server request | status = waiting_approval | 更新等待审批卡片；当前安全默认回写 decline |
+| approval server request | status = waiting_approval | 更新等待审批卡片；按钮回调后回写 decision，超时默认 decline |
 | `turn/completed` success | status = completed | 更新最终卡片 |
 | `turn/completed` failure | status = failed | 更新失败卡片 |
 
@@ -249,8 +249,9 @@ failed
 
 - 将 Runtime Task 状态切到 `waiting_approval`。
 - 只记录脱敏后的 `requestId`、`method`、`approvalId`、`itemId`、审批类型和安全摘要。
-- 更新同一张飞书任务卡片为“需要确认”。
-- 在飞书交互按钮尚未接入前，默认向 app-server 回写 `{ "decision": "decline" }`，避免无人值守时放行敏感动作。
+- 更新同一张飞书任务卡片为“需要确认”，并展示“允许一次 / 本会话允许 / 拒绝 / 停止”按钮。
+- `card.action.trigger` 回调会通过 pending approval 映射回写 app-server `{ "decision": "accept" | "acceptForSession" | "decline" | "cancel" }`。
+- 如果用户没有在超时时间内点击按钮，默认向 app-server 回写 `{ "decision": "decline" }`，避免无人值守时放行敏感动作。
 
 已确认的 approval server request 方法：
 
@@ -260,7 +261,7 @@ failed
 - `applyPatchApproval`
 - `execCommandApproval`
 
-完整飞书审批按钮回写尚未实现。
+当前按钮闭环只传递脱敏 request id / approval id / item id，不展示命令正文、diff、完整路径、环境变量或原始 payload。
 
 后续流程：
 
@@ -284,7 +285,7 @@ Codex approval server request
 - thread 创建成功。
 - turn 启动成功。
 - agent delta 能被聚合。
-- approval server request 能转换为 waiting_approval，并默认安全拒绝。
+- approval server request 能转换为 waiting_approval，飞书按钮能回写 app-server decision，超时默认安全拒绝。
 - turn completed 能产生最终输出。
 - app-server 退出能转换为 failed。
 

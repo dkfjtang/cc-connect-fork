@@ -123,7 +123,10 @@ test("renderTaskCard renders waiting approval summary", () => {
     threadId: "thr_123",
     turnId: "turn_123",
     approval: {
+      requestId: 7,
       approvalId: "approval_123456789",
+      itemId: "item_123",
+      status: "pending",
       summary: "Codex 请求执行命令，需要审批。",
     },
   });
@@ -131,6 +134,13 @@ test("renderTaskCard renders waiting approval summary", () => {
   assert.equal(card.header.title.content, "需要确认");
   assert.equal(card.header.template, "orange");
   assert.equal(card.elements[0].text.content, "Codex 请求执行命令，需要审批。\n\napproval: approval");
+  assert.equal(card.elements[1].tag, "action");
+  assert.deepEqual(
+    card.elements[1].actions.map((action) => action.value.decision),
+    ["accept", "acceptForSession", "decline", "cancel"],
+  );
+  assert.equal(card.elements[1].actions[0].value.fcaAction, "approval.resolve");
+  assert.equal(card.elements[1].actions[0].value.requestId, 7);
   assert.equal(card.elements[0].text.content.includes("secret.txt"), false);
 });
 

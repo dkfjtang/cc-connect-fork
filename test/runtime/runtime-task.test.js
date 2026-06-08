@@ -244,6 +244,28 @@ test("approval request moves task to waiting approval without raw details", () =
   assert.equal(JSON.stringify(snapshot.approval).includes("secret.txt"), false);
 });
 
+test("resolveApproval records decision without raw details", () => {
+  const task = new RuntimeTask({ taskId: "task_123" });
+  task.handleCodexEvent({
+    method: "item/fileChange/requestApproval",
+    requestId: 7,
+    serverRequest: true,
+    params: {
+      itemId: "item_123",
+      approvalId: "approval_123456789",
+      diff: "secret.txt",
+    },
+  });
+
+  task.resolveApproval("decline");
+
+  const snapshot = task.snapshot();
+  assert.equal(snapshot.status, "waiting_approval");
+  assert.equal(snapshot.approval.status, "declined");
+  assert.equal(snapshot.approval.summary, "已拒绝本次操作，等待 Codex 收尾。");
+  assert.equal(JSON.stringify(snapshot.approval).includes("secret.txt"), false);
+});
+
 test("cancel marks task cancelled with readable reason", () => {
   let now = 1_000;
   const task = new RuntimeTask({ taskId: "task_123", now: () => now });

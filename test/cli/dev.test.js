@@ -47,8 +47,8 @@ test("runDev creates sdk transport, probes bot identity, and starts bridge app",
       botOpenId: "ou_bot",
       botName: "Codex",
     }),
-    startMessageListener: async ({ onMessageReceive }) => {
-      calls.push({ type: "listen", onMessageReceive });
+    startMessageListener: async ({ onMessageReceive, onCardAction }) => {
+      calls.push({ type: "listen", onMessageReceive, onCardAction });
     },
   };
 
@@ -98,6 +98,7 @@ test("runDev creates sdk transport, probes bot identity, and starts bridge app",
   assert.deepEqual(calls[2], { type: "start" });
   assert.equal(calls[3].type, "listen");
   assert.equal(typeof calls[3].onMessageReceive, "function");
+  assert.equal(typeof calls[3].onCardAction, "function");
   assert.match(outputText, /bot Codex \(ou_bot\)/);
 });
 

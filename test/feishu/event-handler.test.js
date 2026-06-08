@@ -526,3 +526,64 @@ test("handleMessageReceive propagates runtime errors", async () => {
     /Codex failed/,
   );
 });
+
+test("handleCardAction forwards approval action to runtime", async () => {
+  const calls = [];
+  const handler = new FeishuEventHandler({
+    runtime: {
+      resolveApproval: async (action) => {
+        calls.push(action);
+        return { status: "handled", decision: action.decision, taskStatus: "running" };
+      },
+    },
+  });
+
+  const result = await handler.handleCardAction({
+    event: {
+      operator: { open_id: "ou_123" },
+      context: { open_chat_id: "oc_123", open_message_id: "om_123" },
+      action: {
+        value: {
+          fcaAction: "approval.resolve",
+          decision: "decline",
+          taskId: "task_123",
+          requestId: 7,
+          approvalId: "approval_123",
+        },
+      },
+    },
+  });
+
+  assert.deepEqual(result, { status: "handled", decision: "decline", taskStatus: "running" });
+  assert.deepEqual(calls, [
+    {
+      action: "approval.resolve",
+      decision: "decline",
+      taskId: "task_123",
+      requestId: 7,
+      approvalId: "approval_123",
+      itemId: null,
+      openId: "ou_123",
+      chatId: "oc_123",
+      messageId: "om_123",
+    },
+  ]);
+});
+
+test("handleCardAction skips unsupported card actions", async () => {
+  const handler = new FeishuEventHandler({
+    runtime: {
+      resolveApproval: async () => {
+        throw new Error("should not be called");
+      },
+    },
+  });
+
+  const result = await handler.handleCardAction({
+    event: {
+      action: { value: { fcaAction: "other" } },
+    },
+  });
+
+  assert.deepEqual(result, { status: "skipped", reason: "Unsupported Feishu card action" });
+});
