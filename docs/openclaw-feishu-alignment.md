@@ -4,6 +4,8 @@
 
 fca 不 fork OpenClaw 飞书插件，也不把它作为运行时依赖；但后续功能必须持续对齐其飞书侧源码行为、交互体验和防护能力。
 
+2026-06-09 追加：cc-connect 源码已经提供更接近 fca 目标态的“飞书 + Codex app-server”整合实现。OpenClaw 仍作为飞书官方插件体验基线，但下一阶段的采用/自研裁决以 `docs/cc-connect-deep-comparison.md` 的验证清单为优先依据。
+
 当前对齐基准：
 
 - 仓库：`https://github.com/larksuite/openclaw-lark`

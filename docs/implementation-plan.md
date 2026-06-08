@@ -10,6 +10,7 @@
 - 飞书侧体验基线：对齐 OpenClaw 官方飞书插件源码和功能，但不 fork、不引入其运行时。
 - 飞书侧新增能力规则：先补 OpenClaw 源码行为对齐记录，再实现 fca 的 Codex app-server 映射和测试。
 - OpenClaw/文章已覆盖的飞书通道能力不再作为空白自研；fca 后续只在 Codex app-server 差异层做实现，飞书体验默认按 OpenClaw 行为对齐。
+- cc-connect 源码已覆盖 Codex app-server 后端和飞书通道主链路；在完成 cc-connect 实机验证和缺口清单前，暂停 fca 新增通用飞书通道能力。
 
 ## M0 文档和配置骨架
 
@@ -150,6 +151,8 @@ Done 标准：
 
 ## M5 下一阶段评估
 
+当前优先级已经调整：先验证 cc-connect 是否可直接承接主方案，再决定 fca 是否继续独立实现。
+
 当前进展：
 
 - 群聊 @ 机器人已完成最小安全入口：只处理 `chat_type=group`、文本消息、`mentions` 命中当前 bot `open_id` 的事件。
@@ -171,14 +174,16 @@ Done 标准：
 
 候选能力：
 
-- CardKit 2.0 流式卡片，失败后回退 IM patch。
-- 文件下载和回传。
-- WebSocket 长驻部署模式。
+- cc-connect app-server 后端实机 smoke。
+- cc-connect 飞书 WebSocket、卡片 action、Patch / rich card 实机 smoke。
+- cc-connect 安全缺口清单：命令禁用、权限模式、审批脱敏、附件前置审批、日志脱敏。
+- 如果 cc-connect 缺口可控，优先采用 cc-connect 或贡献上游补丁；fca 保留为薄适配/文档项目。
 
 路线收敛：
 
 - 以上候选能力如果属于飞书通道通用能力，必须先按 `docs/openclaw-feishu-alignment.md` 更新 OpenClaw 行为基线，再实现 fca 的 Codex 映射。
 - 不再重复设计 OpenClaw 已有的 WebSocket、streaming card、footer、文件通道和审批交互范式；实现重点放在 Codex app-server thread / turn / approval / event 映射。
+- cc-connect 已有成熟实现的能力不再进入 fca 自研队列，除非 `docs/cc-connect-deep-comparison.md` 中的实机验证证明其不能满足本项目边界。
 
 进入条件：
 

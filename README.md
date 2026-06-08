@@ -46,6 +46,8 @@
 
 飞书侧体验持续对齐 OpenClaw 官方飞书插件：不 fork、不复用其运行时源码，但以其长连接、实时卡片、流式更新、footer、事件去重和权限策略作为功能基线。新增飞书侧能力时，必须先做 OpenClaw 源码行为对齐记录，再实现 fca 的 Codex app-server 映射。
 
+2026-06-09 补充：cc-connect 源码已经覆盖飞书 WebSocket、交互卡片、footer、Codex `app-server` 后端、approval server request 和多会话控制面。fca 后续暂停新增通用飞书通道能力，先验证是否直接采用 cc-connect 或向其上游贡献缺口；详见 [CC-Connect 源码深度对比](docs/cc-connect-deep-comparison.md)。
+
 ## 本地验证
 
 ```powershell
@@ -72,6 +74,7 @@ npm run smoke:codex -- --cwd F:\development\f-codex
 - [系统架构](docs/architecture.md)
 - [飞书交互模型](docs/feishu-interaction-model.md)
 - [OpenClaw 飞书插件对齐审计](docs/openclaw-feishu-alignment.md)
+- [CC-Connect 源码深度对比](docs/cc-connect-deep-comparison.md)
 - [飞书 SDK 适配层](docs/feishu-sdk-adapter.md)
 - [Codex app-server 适配层](docs/codex-app-server-adapter.md)
 - [实施计划](docs/implementation-plan.md)
