@@ -9,3 +9,9 @@
 - `policy`：用户白名单、工作目录白名单和动作策略。
 - `store`：飞书用户到 Codex thread 的映射。
 - `runtime`：任务状态机、超时和错误处理。
+
+当前已落地：
+
+- `codex/json-rpc-client.js`：JSON-RPC 请求、响应和 notification 分发。
+- `codex/app-server-session.js`：Codex app-server initialize、thread/start 和 turn/start 封装。
+- `codex/turn-output-buffer.js`：Codex delta 输出聚合和卡片摘要截断。
