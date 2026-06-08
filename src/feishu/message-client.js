@@ -1,13 +1,17 @@
 export class FeishuMessageClient {
   #transport;
   #cardChannel;
+  #logger;
 
-  constructor({ transport, cardChannel = "im" }) {
+  constructor({ transport, cardChannel = "im", logger = null }) {
     this.#transport = transport;
     if (!["im", "cardkit"].includes(cardChannel)) {
       throw new Error("FeishuMessageClient cardChannel must be im or cardkit");
     }
     this.#cardChannel = cardChannel;
+    this.#logger = logger ?? {
+      warn: () => {},
+    };
   }
 
   async sendAction(action) {
@@ -66,9 +70,14 @@ export class FeishuMessageClient {
           cardId: response?.data?.card_id ?? response?.data?.cardId ?? null,
           cardSequence: normalizeSequence(response?.data?.sequence),
         };
-      } catch {
+      } catch (error) {
+        this.#logCardKitFallback("send", "cardkit_send_failed", {
+          ...errorLogFields(error),
+        });
         // Fall back to the stable IM card path when CardKit is unavailable or rejected.
       }
+    } else {
+      this.#logCardKitFallback("send", "cardkit_transport_missing");
     }
 
     return this.#sendImCard(action);
@@ -115,9 +124,19 @@ export class FeishuMessageClient {
             nextSequence(action.cardSequence),
           ),
         };
-      } catch {
+      } catch (error) {
+        this.#logCardKitFallback("update", "cardkit_update_failed", {
+          messageId: action.messageId,
+          cardId: action.cardId,
+          ...errorLogFields(error),
+        });
         // Keep the already-sent message usable by patching it through the IM fallback.
       }
+    } else if (action.cardChannel === "cardkit") {
+      this.#logCardKitFallback("update", "cardkit_transport_missing", {
+        messageId: action.messageId,
+        cardId: action.cardId ?? null,
+      });
     }
 
     await callFeishuAction("update", () =>
@@ -132,6 +151,15 @@ export class FeishuMessageClient {
       cardId: null,
       cardSequence: null,
     };
+  }
+
+  #logCardKitFallback(actionType, reason, fields = {}) {
+    const write = this.#logger.warn ?? this.#logger.info ?? (() => {});
+    write("feishu.cardkit_fallback", {
+      actionType,
+      reason,
+      ...fields,
+    });
   }
 }
 
@@ -176,4 +204,11 @@ function nextSequence(value) {
 function normalizeSequence(value, fallback = 0) {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function errorLogFields(error) {
+  return {
+    errorSummary: error instanceof Error ? error.message : String(error),
+    errorName: error instanceof Error ? error.name : typeof error,
+  };
 }

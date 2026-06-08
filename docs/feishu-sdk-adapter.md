@@ -66,7 +66,7 @@ TaskCardController
 
 ## 长连接可观测性
 
-`FeishuSdkTransport` 接收可选 `logger`，并通过 `runDev` 与 runtime 共用同一个 JSONL logger。
+`FeishuSdkTransport` 和 `FeishuMessageClient` 接收可选 `logger`，并通过 `runDev` 与 runtime 共用同一个 JSONL logger。
 
 当前事件：
 
@@ -81,11 +81,12 @@ TaskCardController
 - `feishu.ws_stop_failed`
 - `feishu.event_received`
 - `feishu.event_handler_failed`
+- `feishu.cardkit_fallback`
 - `bridge.shutdown_requested`
 - `bridge.stopped`
 - `bridge.shutdown_failed`
 
-日志只记录 `appId`、事件类型、`message_id`、`chat_id`、`chat_type` 和错误摘要；不记录 `appSecret`、verification token、encrypt key、消息正文或完整事件 payload。
+日志只记录 `appId`、事件类型、`message_id`、`chat_id`、`chat_type`、CardKit 回退原因和错误摘要；不记录 `appSecret`、verification token、encrypt key、消息正文、卡片 payload 或完整事件 payload。
 
 `FeishuSdkTransport.startMessageListener()` 重建 listener 前会先关闭旧 `WSClient`，避免重复长连接残留；如果新 `WSClient.start()` 失败，也会 best-effort 关闭半初始化 client，且保留原始启动失败向上抛出。
 
@@ -191,7 +192,7 @@ transport payload：
 { cardChannel: "im" }
 ```
 
-如果 action 带有 `cardChannel=cardkit`、`cardId`，且 transport 提供 `updateCardKitCard`，会先尝试 CardKit update，并用 `cardSequence + 1` 作为下一次更新序号。CardKit update 失败时，会回退到 `patchMessageCard`，并把 task 中保存的 `cardChannel` 降级为 `im`，避免后续继续依赖不可用的 CardKit 通道。
+如果 action 带有 `cardChannel=cardkit`、`cardId`，且 transport 提供 `updateCardKitCard`，会先尝试 CardKit update，并用 `cardSequence + 1` 作为下一次更新序号。CardKit send / update 方法缺失或失败时，会记录 `feishu.cardkit_fallback`，回退到 `sendMessage` / `patchMessageCard`；update 回退还会把 task 中保存的 `cardChannel` 降级为 `im`，避免后续继续依赖不可用的 CardKit 通道。
 
 ## 后续接入点
 

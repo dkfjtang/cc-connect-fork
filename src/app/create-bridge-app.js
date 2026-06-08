@@ -32,6 +32,7 @@ export function createBridgeApp({
   const feishuMessageClient = new FeishuMessageClient({
     transport: feishuTransport,
     cardChannel: config.cardChannel,
+    logger,
   });
   const cardController = new TaskCardController({
     sendAction: (action) => feishuMessageClient.sendAction(action),

@@ -154,7 +154,7 @@ fca 的目标：
 
 - 默认：普通 IM 卡片 send + patch，running / completed / failed 三态稳定。
 - 已增加运行中更新节流、同一卡片互斥 flush、发送/更新错误分类退避、卡片 payload 尺寸保护、per-chat queue 和飞书 API 错误归一化。
-- 已增加 `FCA_CARD_CHANNEL=cardkit` 配置、卡片 channel / card id / sequence 元数据流转、CardKit send/update 优先调用和 IM fallback；当前 SDK transport 尚未实现真实 CardKit API 方法，因此默认仍保持 IM。
+- 已增加 `FCA_CARD_CHANNEL=cardkit` 配置、卡片 channel / card id / sequence 元数据流转、CardKit send/update 优先调用、`feishu.cardkit_fallback` 脱敏日志和 IM fallback；当前 SDK transport 尚未实现真实 CardKit API 方法，因此默认仍保持 IM。
 - footer 字段可配置化已由 `FCA_CARD_FOOTER_FIELDS` 支持。
 
 ## 不对齐项

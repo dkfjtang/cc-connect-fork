@@ -79,8 +79,10 @@ test("sendAction can send CardKit card when configured", async () => {
 
 test("sendAction falls back to IM card when CardKit send fails", async () => {
   const calls = [];
+  const logEntries = [];
   const client = new FeishuMessageClient({
     cardChannel: "cardkit",
+    logger: fakeLogger(logEntries),
     transport: {
       sendCardKitMessage: async (payload) => {
         calls.push({ method: "sendCardKitMessage", payload });
@@ -113,6 +115,46 @@ test("sendAction falls back to IM card when CardKit send fails", async () => {
     },
   });
   assert.deepEqual(result, { messageId: "om_im", cardChannel: "im", cardId: null, cardSequence: null });
+  assert.deepEqual(logEntries, [
+    {
+      level: "warn",
+      event: "feishu.cardkit_fallback",
+      actionType: "send",
+      reason: "cardkit_send_failed",
+      errorSummary: "Feishu send failed: cardkit unavailable",
+      errorName: "FeishuApiError",
+    },
+  ]);
+  assert.equal(JSON.stringify(logEntries).includes("任务已接收"), false);
+});
+
+test("sendAction logs IM fallback when CardKit transport is missing", async () => {
+  const logEntries = [];
+  const client = new FeishuMessageClient({
+    cardChannel: "cardkit",
+    logger: fakeLogger(logEntries),
+    transport: {
+      sendMessage: async () => ({ data: { message_id: "om_im" } }),
+    },
+  });
+
+  const result = await client.sendAction({
+    type: "send",
+    receiveIdType: "chat_id",
+    receiveId: "oc_123",
+    messageType: "interactive",
+    card: { header: { title: { content: "任务已接收" } } },
+  });
+
+  assert.equal(result.cardChannel, "im");
+  assert.deepEqual(logEntries, [
+    {
+      level: "warn",
+      event: "feishu.cardkit_fallback",
+      actionType: "send",
+      reason: "cardkit_transport_missing",
+    },
+  ]);
 });
 
 test("sendAction updates an existing card message", async () => {
@@ -187,7 +229,9 @@ test("sendAction can update CardKit card metadata", async () => {
 
 test("sendAction falls back to IM patch when CardKit update fails", async () => {
   const calls = [];
+  const logEntries = [];
   const client = new FeishuMessageClient({
+    logger: fakeLogger(logEntries),
     transport: {
       updateCardKitCard: async (payload) => {
         calls.push({ method: "updateCardKitCard", payload });
@@ -219,6 +263,19 @@ test("sendAction falls back to IM patch when CardKit update fails", async () => 
     },
   });
   assert.deepEqual(result, { cardChannel: "im", cardId: null, cardSequence: null });
+  assert.deepEqual(logEntries, [
+    {
+      level: "warn",
+      event: "feishu.cardkit_fallback",
+      actionType: "update",
+      reason: "cardkit_update_failed",
+      messageId: "om_123",
+      cardId: "card_123",
+      errorSummary: "Feishu update failed: cardkit update failed",
+      errorName: "FeishuApiError",
+    },
+  ]);
+  assert.equal(JSON.stringify(logEntries).includes("Codex 执行中"), false);
 });
 
 test("sendTextMessage sends a plain text chat message", async () => {
@@ -328,3 +385,9 @@ test("sendAction normalizes thrown transport errors", async () => {
     },
   );
 });
+
+function fakeLogger(entries) {
+  return {
+    warn: (event, fields) => entries.push({ level: "warn", event, ...fields }),
+  };
+}
