@@ -104,6 +104,7 @@ export class FeishuSdkTransport {
       throw new TypeError("startMessageListener requires onCardAction");
     }
 
+    await this.stop();
     this.#log("info", "feishu.ws_starting");
     const dispatcher = await this.#createEventDispatcher({
       verificationToken: this.#verificationToken,

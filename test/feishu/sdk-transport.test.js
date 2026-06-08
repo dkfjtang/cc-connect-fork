@@ -308,6 +308,47 @@ test("stop closes started WS client", async () => {
   assert.deepEqual(calls, ["start", { type: "close", params: {} }]);
 });
 
+test("startMessageListener closes previous WS client before replacing it", async () => {
+  const calls = [];
+  let wsId = 0;
+  const transport = new FeishuSdkTransport({
+    appId: "cli_123",
+    appSecret: "secret",
+    createClient: () => ({}),
+    createEventDispatcher: () => ({
+      register: () => {},
+    }),
+    createWsClient: () => {
+      wsId += 1;
+      const id = wsId;
+      calls.push(`create:${id}`);
+      return {
+        start: async () => {
+          calls.push(`start:${id}`);
+        },
+        close: async (params = {}) => {
+          calls.push({ type: "close", id, params });
+        },
+      };
+    },
+  });
+
+  await transport.startMessageListener({
+    onMessageReceive: async () => {},
+  });
+  await transport.startMessageListener({
+    onMessageReceive: async () => {},
+  });
+
+  assert.deepEqual(calls, [
+    "create:1",
+    "start:1",
+    { type: "close", id: 1, params: {} },
+    "create:2",
+    "start:2",
+  ]);
+});
+
 test("constructor requires app credentials", () => {
   assert.throws(
     () =>

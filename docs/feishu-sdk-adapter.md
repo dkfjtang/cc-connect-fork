@@ -68,7 +68,9 @@ TaskCardController
 
 日志只记录 `appId`、事件类型、`message_id`、`chat_id`、`chat_type` 和错误摘要；不记录 `appSecret`、verification token、encrypt key、消息正文或完整事件 payload。
 
-`runDev` 会注册 `SIGINT` / `SIGTERM` 退出信号。收到信号后，Bridge 先停止 Codex app-server，再 best-effort 调用 transport `stop()`；当前 SDK transport 没有额外敏感信息输出，后续如接入可显式关闭的 WS client，应继续复用这个接口。
+`FeishuSdkTransport.startMessageListener()` 重建 listener 前会先关闭旧 `WSClient`，避免重复长连接残留。
+
+`runDev` 会注册 `SIGINT` / `SIGTERM` 退出信号。收到信号后，Bridge 先停止 Codex app-server，再 best-effort 调用 transport `stop()`；SDK transport 会通过 `WSClient.close({})` 关闭已启动的长连接，且不会输出额外敏感信息。
 
 ## 卡片更新重试
 
