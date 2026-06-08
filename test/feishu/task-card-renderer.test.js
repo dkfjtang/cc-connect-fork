@@ -113,6 +113,27 @@ test("renderTaskCard renders failed status with readable error", () => {
   assert.match(card.elements.at(-1).elements[0].content, /错误: app_server_error/);
 });
 
+test("renderTaskCard renders waiting approval summary", () => {
+  const card = renderTaskCard({
+    taskId: "task_123",
+    status: "waiting_approval",
+    cwd: "F:\\development\\f-codex",
+    summaryText: "summary",
+    finalText: "",
+    threadId: "thr_123",
+    turnId: "turn_123",
+    approval: {
+      approvalId: "approval_123456789",
+      summary: "Codex 请求执行命令，需要审批。",
+    },
+  });
+
+  assert.equal(card.header.title.content, "需要确认");
+  assert.equal(card.header.template, "orange");
+  assert.equal(card.elements[0].text.content, "Codex 请求执行命令，需要审批。\n\napproval: approval");
+  assert.equal(card.elements[0].text.content.includes("secret.txt"), false);
+});
+
 test("renderTaskCard truncates overly long card body", () => {
   const card = renderTaskCard({
     taskId: "task_123",

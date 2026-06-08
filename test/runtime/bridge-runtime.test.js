@@ -367,6 +367,68 @@ test("handleTextMessage schedules running updates for item stage events", async 
   assert.deepEqual(syncStageLabels.slice(0, 2), [null, "执行命令"]);
 });
 
+test("handleTextMessage schedules waiting approval card update", async () => {
+  let emitEvent;
+  let markEventReady;
+  const eventReady = new Promise((resolve) => {
+    markEventReady = resolve;
+  });
+  const syncStatuses = [];
+  let timeoutCallback;
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession({
+      onEvent: (handler) => {
+        emitEvent = handler;
+        markEventReady();
+        return () => {};
+      },
+      startTurnHook: () => {},
+    }),
+    cardController: {
+      sync: async (task) => {
+        syncStatuses.push(task.snapshot().status);
+        task.attachCard("om_123");
+      },
+    },
+    runningUpdateThrottleMs: 1000,
+    now: () => 0,
+    setTimeoutFn: (callback) => {
+      timeoutCallback = callback;
+      return "timer";
+    },
+    clearTimeoutFn: () => {},
+  });
+
+  const pending = runtime.handleTextMessage({
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_123",
+    text: "hello",
+  });
+  await eventReady;
+
+  emitEvent({
+    method: "item/commandExecution/requestApproval",
+    requestId: 7,
+    serverRequest: true,
+    params: {
+      itemId: "item_123",
+      threadId: "thr_new",
+      turnId: "turn_new",
+      command: "cat secret.txt",
+    },
+  });
+  await Promise.resolve();
+  await timeoutCallback();
+
+  emitEvent({ method: "turn/completed", params: { status: "failed", error: { message: "denied" } } });
+  await pending;
+
+  assert.deepEqual(syncStatuses.slice(0, 2), ["queued", "waiting_approval"]);
+});
+
 test("handleTextMessage keeps turn alive when a running card update fails", async () => {
   let emitEvent;
   let markEventReady;

@@ -145,10 +145,11 @@ request_id -> resolver
 
 收到 stdout JSON 行后：
 
-1. 如果包含 `id`，按 response 处理。
+1. 如果包含 `id` 且没有 `method`，按 response 处理。
 2. 如果包含 `method` 且没有 `id`，按 notification 处理。
-3. JSON parse 失败，记录协议错误并保留原始摘要。
-4. 未识别 notification 不应导致 Bridge 崩溃。
+3. 如果同时包含 `id` 和 `method`，按 app-server server request 处理，并写回 JSON-RPC result / error。
+4. JSON parse 失败，记录协议错误并保留原始摘要。
+5. 未识别 notification 不应导致 Bridge 崩溃。
 
 ## 事件翻译
 
@@ -159,7 +160,7 @@ request_id -> resolver
 | `item/agentMessage/delta` | 追加到 output buffer | 节流更新卡片正文摘要 |
 | `item/completed` | 记录 item 完成 | 更新最近阶段安全标签 |
 | `thread/tokenUsage/updated` | 记录 token usage | 更新 footer 的 tokens / cache / context 指标 |
-| approval 类事件 | status = waiting_approval | 后续生成审批卡片 |
+| approval server request | status = waiting_approval | 更新等待审批卡片；当前安全默认回写 decline |
 | `turn/completed` success | status = completed | 更新最终卡片 |
 | `turn/completed` failure | status = failed | 更新失败卡片 |
 
@@ -242,14 +243,29 @@ failed
 - 飞书卡片更新为本地 Codex 连接中断。
 - Bridge 可按策略重启 app-server。
 
-## 权限和审批预留
+## 权限和审批
 
-MVP 不实现完整审批回写，但适配层要保留 approval event 分发口。
+当前适配层已识别 Codex app-server 的 approval server request，并会在收到请求时：
+
+- 将 Runtime Task 状态切到 `waiting_approval`。
+- 只记录脱敏后的 `requestId`、`method`、`approvalId`、`itemId`、审批类型和安全摘要。
+- 更新同一张飞书任务卡片为“需要确认”。
+- 在飞书交互按钮尚未接入前，默认向 app-server 回写 `{ "decision": "decline" }`，避免无人值守时放行敏感动作。
+
+已确认的 approval server request 方法：
+
+- `item/commandExecution/requestApproval`
+- `item/fileChange/requestApproval`
+- `item/permissions/requestApproval`
+- `applyPatchApproval`
+- `execCommandApproval`
+
+完整飞书审批按钮回写尚未实现。
 
 后续流程：
 
 ```text
-Codex approval event
+Codex approval server request
   -> Runtime Task status = waiting_approval
   -> Feishu approval card
   -> user approve / reject
@@ -268,6 +284,7 @@ Codex approval event
 - thread 创建成功。
 - turn 启动成功。
 - agent delta 能被聚合。
+- approval server request 能转换为 waiting_approval，并默认安全拒绝。
 - turn completed 能产生最终输出。
 - app-server 退出能转换为 failed。
 
@@ -276,5 +293,4 @@ Codex approval event
 ## 开放问题
 
 - 是否每个用户共享一个 app-server 连接，还是每个任务独立连接。
-- approval event 的确切方法名需要以后续 schema 生成为准。
 - 是否需要在 turn 参数里显式传入 sandbox 和 approval policy。

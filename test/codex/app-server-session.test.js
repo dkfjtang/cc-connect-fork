@@ -3,6 +3,8 @@ import { test } from "node:test";
 
 import { AppServerSession } from "../../src/codex/app-server-session.js";
 
+const flushAsyncHandlers = () => new Promise((resolve) => setImmediate(resolve));
+
 test("initialize sends client metadata and initialized notification", async () => {
   const written = [];
   const session = new AppServerSession({
@@ -166,4 +168,49 @@ test("onEvent subscribes additional notification handlers", () => {
   session.handleMessage({ method: "turn/completed", params: {} });
 
   assert.deepEqual(events, [{ method: "turn/started", params: {} }]);
+});
+
+test("approval server request is emitted and declined by default", async () => {
+  const written = [];
+  const events = [];
+  const session = new AppServerSession({
+    write: (message) => written.push(message),
+    onEvent: (event) => events.push(event),
+  });
+
+  session.handleMessage({
+    id: 7,
+    method: "item/commandExecution/requestApproval",
+    params: { itemId: "item_123", threadId: "thr_123", turnId: "turn_123" },
+  });
+  await flushAsyncHandlers();
+
+  assert.deepEqual(events, [
+    {
+      method: "item/commandExecution/requestApproval",
+      params: { itemId: "item_123", threadId: "thr_123", turnId: "turn_123" },
+      requestId: 7,
+      serverRequest: true,
+    },
+  ]);
+  assert.deepEqual(written, [{ id: 7, result: { decision: "decline" } }]);
+});
+
+test("onRequest overrides server request handling", async () => {
+  const written = [];
+  const session = new AppServerSession({
+    write: (message) => written.push(message),
+  });
+
+  const unsubscribe = session.onRequest(async () => ({ decision: "accept" }));
+  session.handleMessage({
+    id: 7,
+    method: "item/fileChange/requestApproval",
+    params: { itemId: "item_123", threadId: "thr_123", turnId: "turn_123" },
+  });
+  await flushAsyncHandlers();
+
+  unsubscribe();
+
+  assert.deepEqual(written, [{ id: 7, result: { decision: "accept" } }]);
 });

@@ -10,13 +10,16 @@ export class AppServerSession {
   #client;
   #clientInfo;
   #eventHandlers = new Set();
+  #requestHandler;
 
-  constructor({ write, onEvent = () => {}, clientInfo = DEFAULT_CLIENT_INFO }) {
+  constructor({ write, onEvent = () => {}, onRequest = null, clientInfo = DEFAULT_CLIENT_INFO }) {
     this.#clientInfo = clientInfo;
     this.#eventHandlers.add(onEvent);
+    this.#requestHandler = onRequest ?? defaultServerRequestHandler;
     this.#client = new JsonRpcClient({
       write,
       onNotification: (event) => this.#emitEvent(event),
+      onRequest: (request) => this.#handleServerRequest(request),
     });
   }
 
@@ -68,9 +71,47 @@ export class AppServerSession {
     };
   }
 
+  onRequest(handler) {
+    this.#requestHandler = handler;
+    return () => {
+      if (this.#requestHandler === handler) {
+        this.#requestHandler = defaultServerRequestHandler;
+      }
+    };
+  }
+
+  async #handleServerRequest(request) {
+    this.#emitEvent({
+      method: request.method,
+      params: request.params,
+      requestId: request.id,
+      serverRequest: true,
+    });
+
+    return this.#requestHandler(request);
+  }
+
   #emitEvent(event) {
     for (const handler of this.#eventHandlers) {
       handler(event);
     }
   }
+}
+
+function defaultServerRequestHandler(request) {
+  if (isApprovalRequest(request.method)) {
+    return { decision: "decline" };
+  }
+
+  throw new Error(`Unsupported server request: ${request.method}`);
+}
+
+function isApprovalRequest(method) {
+  return [
+    "item/commandExecution/requestApproval",
+    "item/fileChange/requestApproval",
+    "item/permissions/requestApproval",
+    "applyPatchApproval",
+    "execCommandApproval",
+  ].includes(method);
 }

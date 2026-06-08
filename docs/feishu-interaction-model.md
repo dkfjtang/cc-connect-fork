@@ -73,11 +73,11 @@ fca 可以高度复用 OpenClaw 类飞书插件的交互体验，但不应完全
 展示：
 
 - 标题：需要确认
-- 正文：动作类型、影响范围、风险摘要
+- 正文：Codex approval server request 的脱敏动作摘要和 approval 短 id
 - 操作：允许、拒绝、查看详情
 - footer：`thread_id`、`turn_id`、approval id
 
-第一阶段不实现完整审批，但卡片结构要预留。
+当前阶段已经能把 approval server request 显示为等待审批卡片，但飞书按钮回调尚未接入；无人交互时 app-server 默认收到 `decline`。
 
 ### completed
 
@@ -151,7 +151,7 @@ footer 只展示排障有用、但不泄露敏感信息的字段。
 | `item/agentMessage/delta` | 聚合文本 delta，不逐字更新 |
 | `item/completed` | 更新最近完成阶段安全标签 |
 | `thread/tokenUsage/updated` | 更新 footer token / cache / context 指标 |
-| approval 类事件 | 卡片状态改为 waiting_approval |
+| approval server request | 卡片状态改为 waiting_approval，并展示脱敏审批摘要 |
 | `turn/completed` success | 卡片状态改为 completed |
 | `turn/completed` failure | 卡片状态改为 failed |
 | app-server 断开 | 卡片状态改为 failed |
@@ -182,6 +182,8 @@ MVP 策略：
 - 风险等级：低、中、高。
 - 选择项：允许一次、拒绝、停止任务。
 - 回调上下文：`thread_id`、`turn_id`、approval id。
+
+当前已完成协议基础：Bridge 可识别 `item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`、`applyPatchApproval` 和 `execCommandApproval`，并默认安全拒绝。下一步才是把飞书按钮选择回写为 app-server approval response。
 
 审批结果必须回写 Codex app-server，而不是只更新飞书卡片。
 

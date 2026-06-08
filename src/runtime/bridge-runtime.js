@@ -220,7 +220,7 @@ export class BridgeRuntime {
     const syncRunning = async () => {
       timer = null;
       lastSyncAt = this.#now();
-      if (task.snapshot().status === "running") {
+      if (["running", "waiting_approval"].includes(task.snapshot().status)) {
         try {
           await this.#cardController.sync(task);
         } catch {
@@ -302,6 +302,11 @@ function shouldScheduleRunningUpdate(method) {
     "item/agentMessage/delta",
     "item/completed",
     "thread/tokenUsage/updated",
+    "item/commandExecution/requestApproval",
+    "item/fileChange/requestApproval",
+    "item/permissions/requestApproval",
+    "applyPatchApproval",
+    "execCommandApproval",
   ].includes(method);
 }
 

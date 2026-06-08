@@ -52,11 +52,22 @@ function cardBody(snapshot) {
     return truncate(snapshot.errorSummary || "Codex turn failed", BODY_LIMIT);
   }
 
+  if (snapshot.status === "waiting_approval") {
+    return truncate(approvalBody(snapshot), BODY_LIMIT);
+  }
+
   if (snapshot.status === "completed") {
     return truncate(joinBody([stageText(snapshot, "最近阶段"), snapshot.finalText || snapshot.summaryText]), BODY_LIMIT);
   }
 
   return truncate(joinBody([stageText(snapshot), snapshot.summaryText]), BODY_LIMIT);
+}
+
+function approvalBody(snapshot) {
+  return joinBody([
+    snapshot.approval?.summary ?? "Codex 请求审批。",
+    snapshot.approval?.approvalId ? `approval: ${shortId(String(snapshot.approval.approvalId))}` : null,
+  ]);
 }
 
 function stageText(snapshot, fallbackPrefix = "阶段") {

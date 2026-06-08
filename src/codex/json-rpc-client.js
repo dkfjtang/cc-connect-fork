@@ -3,14 +3,16 @@ export class JsonRpcClient {
   #pending = new Map();
   #write;
   #onNotification;
+  #onRequest;
 
-  constructor({ write, onNotification = () => {} }) {
+  constructor({ write, onNotification = () => {}, onRequest = null }) {
     if (typeof write !== "function") {
       throw new TypeError("JsonRpcClient requires a write function");
     }
 
     this.#write = write;
     this.#onNotification = onNotification;
+    this.#onRequest = onRequest;
   }
 
   request(method, params = {}) {
@@ -30,6 +32,11 @@ export class JsonRpcClient {
   }
 
   handleMessage(message) {
+    if (Object.hasOwn(message, "id") && typeof message.method === "string") {
+      this.#handleServerRequest(message);
+      return;
+    }
+
     if (Object.hasOwn(message, "id")) {
       this.#handleResponse(message);
       return;
@@ -37,6 +44,32 @@ export class JsonRpcClient {
 
     if (typeof message.method === "string") {
       this.#onNotification(message);
+    }
+  }
+
+  async #handleServerRequest(message) {
+    if (!this.#onRequest) {
+      this.#write({
+        id: message.id,
+        error: {
+          code: -32601,
+          message: `Unsupported server request: ${message.method}`,
+        },
+      });
+      return;
+    }
+
+    try {
+      const result = await this.#onRequest(message);
+      this.#write({ id: message.id, result });
+    } catch (error) {
+      this.#write({
+        id: message.id,
+        error: {
+          code: error?.code ?? -32603,
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
     }
   }
 

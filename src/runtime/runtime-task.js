@@ -21,6 +21,7 @@ export class RuntimeTask {
   #tokenUsage = null;
   #currentStage = null;
   #lastStage = null;
+  #approval = null;
   #output;
 
   constructor({
@@ -90,6 +91,13 @@ export class RuntimeTask {
       case "thread/tokenUsage/updated":
         this.#handleTokenUsageUpdated(event.params);
         break;
+      case "item/commandExecution/requestApproval":
+      case "item/fileChange/requestApproval":
+      case "item/permissions/requestApproval":
+      case "applyPatchApproval":
+      case "execCommandApproval":
+        this.#handleApprovalRequest(event);
+        break;
       default:
         break;
     }
@@ -119,6 +127,28 @@ export class RuntimeTask {
       tokenUsage: this.#tokenUsage,
       currentStage: this.#currentStage,
       lastStage: this.#lastStage,
+      approval: this.#approval,
+    };
+  }
+
+  #handleApprovalRequest(event) {
+    const params = event.params ?? {};
+    this.#status = "waiting_approval";
+    if (params.threadId || params.conversationId) {
+      this.#threadId = params.threadId ?? params.conversationId;
+    }
+    if (params.turnId) {
+      this.#turnId = params.turnId;
+    }
+
+    this.#approval = {
+      requestId: event.requestId ?? null,
+      method: event.method,
+      approvalId: params.approvalId ?? params.callId ?? params.itemId ?? null,
+      itemId: params.itemId ?? params.callId ?? null,
+      type: approvalType(event.method),
+      status: "pending",
+      summary: approvalSummary(event.method),
     };
   }
 
@@ -187,6 +217,34 @@ function stageFromItem(item = {}, status) {
     status: item.status ?? status,
     label: stageLabel(item),
   };
+}
+
+function approvalType(method) {
+  switch (method) {
+    case "item/commandExecution/requestApproval":
+    case "execCommandApproval":
+      return "command";
+    case "item/fileChange/requestApproval":
+    case "applyPatchApproval":
+      return "file_change";
+    case "item/permissions/requestApproval":
+      return "permissions";
+    default:
+      return "approval";
+  }
+}
+
+function approvalSummary(method) {
+  switch (approvalType(method)) {
+    case "command":
+      return "Codex 请求执行命令，需要审批。";
+    case "file_change":
+      return "Codex 请求修改文件，需要审批。";
+    case "permissions":
+      return "Codex 请求额外权限，需要审批。";
+    default:
+      return "Codex 请求审批。";
+  }
 }
 
 function stageLabel(item = {}) {

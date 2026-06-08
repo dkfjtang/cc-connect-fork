@@ -39,6 +39,7 @@ test("new runtime task starts queued with Feishu context", () => {
     tokenUsage: null,
     currentStage: null,
     lastStage: null,
+    approval: null,
   });
 });
 
@@ -208,6 +209,39 @@ test("token usage notification updates task diagnostics", () => {
   assert.equal(snapshot.turnId, "turn_123");
   assert.equal(snapshot.tokenUsage.total.totalTokens, 1350);
   assert.equal(snapshot.tokenUsage.total.cachedInputTokens, 400);
+});
+
+test("approval request moves task to waiting approval without raw details", () => {
+  const task = new RuntimeTask({ taskId: "task_123" });
+
+  task.handleCodexEvent({
+    method: "item/commandExecution/requestApproval",
+    requestId: 7,
+    serverRequest: true,
+    params: {
+      itemId: "item_123",
+      threadId: "thr_123",
+      turnId: "turn_123",
+      approvalId: "approval_123456789",
+      command: "cat secret.txt",
+      cwd: "F:\\development\\f-codex",
+    },
+  });
+
+  const snapshot = task.snapshot();
+  assert.equal(snapshot.status, "waiting_approval");
+  assert.equal(snapshot.threadId, "thr_123");
+  assert.equal(snapshot.turnId, "turn_123");
+  assert.deepEqual(snapshot.approval, {
+    requestId: 7,
+    method: "item/commandExecution/requestApproval",
+    approvalId: "approval_123456789",
+    itemId: "item_123",
+    type: "command",
+    status: "pending",
+    summary: "Codex 请求执行命令，需要审批。",
+  });
+  assert.equal(JSON.stringify(snapshot.approval).includes("secret.txt"), false);
 });
 
 test("cancel marks task cancelled with readable reason", () => {

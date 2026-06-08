@@ -50,3 +50,51 @@ test("notification handler receives app-server notifications", () => {
     { method: "turn/started", params: { turn: { id: "turn_123" } } },
   ]);
 });
+
+test("server request handler writes result response", async () => {
+  const written = [];
+  const requests = [];
+  const client = new JsonRpcClient({
+    write: (message) => written.push(message),
+    onRequest: async (message) => {
+      requests.push(message);
+      return { decision: "decline" };
+    },
+  });
+
+  client.handleMessage({
+    id: 7,
+    method: "item/commandExecution/requestApproval",
+    params: { itemId: "item_123", threadId: "thr_123", turnId: "turn_123" },
+  });
+  await Promise.resolve();
+
+  assert.deepEqual(requests, [
+    {
+      id: 7,
+      method: "item/commandExecution/requestApproval",
+      params: { itemId: "item_123", threadId: "thr_123", turnId: "turn_123" },
+    },
+  ]);
+  assert.deepEqual(written, [{ id: 7, result: { decision: "decline" } }]);
+});
+
+test("unsupported server request writes method error", async () => {
+  const written = [];
+  const client = new JsonRpcClient({
+    write: (message) => written.push(message),
+  });
+
+  client.handleMessage({ id: 7, method: "unknown/request", params: {} });
+  await Promise.resolve();
+
+  assert.deepEqual(written, [
+    {
+      id: 7,
+      error: {
+        code: -32601,
+        message: "Unsupported server request: unknown/request",
+      },
+    },
+  ]);
+});
