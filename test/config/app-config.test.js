@@ -8,6 +8,7 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
     FCA_ALLOWED_OPEN_IDS: "ou_1, ou_2",
     FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex;F:\\development\\IDSS",
     FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
+    FEISHU_APP_ID: "cli_123",
     FCA_CODEX_BIN: "codex",
     FCA_THREAD_STORE_PATH: "data\\threads.json",
     FCA_TURN_TIMEOUT_SECONDS: "120",
@@ -18,6 +19,7 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
     "F:\\development\\f-codex",
     "F:\\development\\IDSS",
   ]);
+  assert.equal(config.feishuAppId, "cli_123");
   assert.equal(config.defaultWorkdir, "F:\\development\\f-codex");
   assert.equal(config.codexBin, "codex");
   assert.equal(config.threadStorePath, "data\\threads.json");
@@ -30,6 +32,7 @@ test("loadConfig uses safe local defaults when optional values are missing", () 
   assert.deepEqual(config.allowedOpenIds, []);
   assert.deepEqual(config.allowedWorkdirs, []);
   assert.equal(config.defaultWorkdir, null);
+  assert.equal(config.feishuAppId, null);
   assert.equal(config.codexBin, "codex");
   assert.equal(config.codexListen, "stdio://");
   assert.equal(config.logLevel, "info");

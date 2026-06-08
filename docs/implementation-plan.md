@@ -7,6 +7,7 @@
 - 飞书入口：企业自建应用长连接。
 - 首批消息类型：私聊文本。
 - 首批权限模型：白名单用户 + 白名单工作目录。
+- 飞书侧体验基线：对齐 OpenClaw 官方飞书插件，但不 fork、不引入其运行时。
 
 ## M0 文档和配置骨架
 
@@ -36,6 +37,7 @@ Done 标准：
 - 建立 `src` 下模块边界。
 - 提供本地启动命令。
 - 提供基础日志输出。
+- 提供 app factory，统一装配 config、policy、thread store、Codex app-server 和飞书 event handler。
 
 建议模块：
 
@@ -50,6 +52,7 @@ Done 标准：
 - 本地进程可启动。
 - 缺失配置时能给出明确错误。
 - 不需要真实飞书事件也能跑基础自检。
+- 事件 handler 具备 OpenClaw 对齐的基础入站护栏：app_id 校验、自回声过滤、message_id 去重和过期事件丢弃。
 
 ## M2 Codex app-server 最小链路
 
@@ -73,12 +76,15 @@ Done 标准：
 交付物：
 
 - 接入飞书长连接。
+- 查询 bot open_id 并注入事件处理器，启用自回声过滤。
 - 解析私聊文本消息。
 - 白名单用户校验。
+- 按 chat / thread 串行处理同一会话内任务。
 - 调用 Codex turn。
 - 创建任务卡片。
 - 将 running / completed / failed 状态更新到同一张卡片。
 - 回传最终文本到卡片正文。
+- 对 Codex delta 做节流 flush，避免逐 token 更新飞书卡片。
 
 Done 标准：
 
@@ -108,6 +114,8 @@ Done 标准：
 候选能力：
 
 - 飞书交互卡片审批。
+- CardKit 2.0 流式卡片，失败后回退 IM patch。
+- 取消/停止任务快路径。
 - 运行中进度消息。
 - 群聊 @ 机器人。
 - 文件下载和回传。

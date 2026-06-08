@@ -44,6 +44,8 @@
 
 `codex exec --json` 仅保留为诊断和降级路径，不作为主架构。实验性 WebSocket 传输后续再评估，MVP 不开放非本机监听。
 
+飞书侧体验持续对齐 OpenClaw 官方飞书插件：不 fork、不复用其运行时源码，但以其长连接、实时卡片、流式更新、footer、事件去重和权限策略作为功能基线。
+
 ## 本地验证
 
 ```powershell
@@ -58,6 +60,7 @@ npm test
 - [MVP 推进方案](docs/mvp-plan.md)
 - [系统架构](docs/architecture.md)
 - [飞书交互模型](docs/feishu-interaction-model.md)
+- [OpenClaw 飞书插件对齐审计](docs/openclaw-feishu-alignment.md)
 - [飞书 SDK 适配层](docs/feishu-sdk-adapter.md)
 - [Codex app-server 适配层](docs/codex-app-server-adapter.md)
 - [实施计划](docs/implementation-plan.md)

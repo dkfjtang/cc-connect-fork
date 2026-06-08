@@ -12,6 +12,8 @@
 
 当前已落地：
 
+- `app/create-bridge-app.js`：组装 config、policy、thread store、Codex app-server、飞书消息客户端和事件 handler。
+- `cli/dev.js`：本地 dev 启动入口，当前只做凭据检查和 app 装配。
 - `codex/json-rpc-client.js`：JSON-RPC 请求、响应和 notification 分发。
 - `codex/json-line-channel.js`：app-server stdio JSONL 读写和分片重组。
 - `codex/app-server-session.js`：Codex app-server initialize、thread/start、turn/start 和 notification 订阅封装。
@@ -20,6 +22,7 @@
 - `cli/smoke-codex-turn.js`：不依赖飞书的 Codex app-server smoke turn 入口。
 - `config/app-config.js`：从环境变量解析 fca 本地配置，不读取真实凭据文件。
 - `feishu/event-handler.js`：处理飞书消息事件并调用 BridgeRuntime。
+- `feishu/event-handler.js` 已具备基础 OpenClaw 对齐护栏：app_id 校验、自回声过滤、message_id 去重和过期事件丢弃。
 - `feishu/message-client.js`：将 SDK 无关的飞书消息 action 转换为 transport 调用。
 - `feishu/message-event-parser.js`：解析 `im.message.receive_v1` 私聊文本事件。
 - `feishu/task-card-renderer.js`：将 fca task snapshot 渲染为飞书任务卡片 payload。

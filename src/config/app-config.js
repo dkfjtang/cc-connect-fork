@@ -13,6 +13,7 @@ export function loadConfig(env = process.env) {
   );
 
   return {
+    feishuAppId: env.FEISHU_APP_ID?.trim() || null,
     allowedOpenIds: splitList(env.FCA_ALLOWED_OPEN_IDS, ","),
     allowedWorkdirs,
     defaultWorkdir: env.FCA_DEFAULT_WORKDIR?.trim() || null,
