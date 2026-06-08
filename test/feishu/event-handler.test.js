@@ -135,6 +135,7 @@ test("handleMessageReceive logs skipped message gate result without raw content"
     resultStatus: "skipped",
     durationMs: 75,
     reason: "Only text messages are supported",
+    attachmentKind: "file",
   });
   assert.equal(JSON.stringify(logEntries).includes("file_secret"), false);
   assert.equal(JSON.stringify(logEntries).includes("secret.txt"), false);
@@ -176,7 +177,7 @@ test("handleMessageReceive replies unsupported notice for private non-text messa
 
   assert.deepEqual(result, {
     status: "handled",
-    reason: "Unsupported Feishu message type notified",
+    reason: "Feishu attachment input is disabled",
     attachmentKind: "file",
   });
   assert.deepEqual(notices, [
@@ -226,11 +227,55 @@ test("handleMessageReceive logs unsupported private attachment kind without raw 
     chatType: "p2p",
     resultStatus: "handled",
     durationMs: 25,
-    reason: "Unsupported Feishu message type notified",
+    reason: "Feishu attachment input is disabled",
     attachmentKind: "image",
   });
   assert.equal(JSON.stringify(logEntries).includes("image_secret"), false);
   assert.equal(JSON.stringify(logEntries).includes("secret.png"), false);
+});
+
+test("handleMessageReceive keeps enabled attachments behind unfinished download boundary", async () => {
+  const notices = [];
+  const handler = new FeishuEventHandler({
+    runtime: {
+      handleTextMessage: async () => {
+        throw new Error("should not start Codex turn for attachment message");
+      },
+    },
+    unsupportedMessageClient: {
+      sendTextMessage: async (message) => {
+        notices.push(message);
+      },
+    },
+    feishuFileInputsEnabled: true,
+  });
+
+  const result = await handler.handleMessageReceive({
+    event: {
+      sender: { sender_id: { open_id: "ou_123" } },
+      message: {
+        message_id: "om_enabled_file",
+        chat_id: "oc_123",
+        chat_type: "p2p",
+        message_type: "file",
+        content: JSON.stringify({ file_key: "file_secret", file_name: "secret.txt" }),
+      },
+    },
+  });
+
+  assert.deepEqual(result, {
+    status: "handled",
+    reason: "Feishu attachment input is eligible",
+    attachmentKind: "file",
+  });
+  assert.deepEqual(notices, [
+    {
+      chatId: "oc_123",
+      text: "飞书附件输入能力尚未完成下载和审批闭环，当前不会下载附件。请先发送文本任务。",
+    },
+  ]);
+  assert.equal(JSON.stringify(notices).includes("file_secret"), false);
+  assert.equal(JSON.stringify(notices).includes("secret.txt"), false);
 });
 
 test("handleMessageReceive deduplicates unsupported non-text notices", async () => {

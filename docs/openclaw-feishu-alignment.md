@@ -126,6 +126,7 @@ fca 映射：
 - 新增 `feishu.message_handled` 和 `feishu.message_skipped`，记录消息 gate 结果、处理耗时、跳过原因和任务状态，不记录消息正文、附件 key、文件名或完整 payload。
 - `FCA_FEISHU_FILE_INPUTS_ENABLED` 先作为文件输入能力门禁进入配置检查和 diagnostics，当前只暴露布尔状态，不下载或读取附件。
 - 非文本消息已增加安全 envelope，后续对齐 OpenClaw 文件/图片下载能力时只从该 envelope 进入下载流程，日志仍只允许记录 `attachmentKind` 枚举。
+- 附件输入策略层已能按开关、chat 类型和附件分类给出 `eligible` 决策；真实下载仍未接入，避免在缺少审批和审计闭环时读取飞书文件内容。
 
 差异理由：
 

@@ -159,6 +159,58 @@ test("createBridgeApp exposes config for diagnostics", () => {
   assert.deepEqual(app.config.allowedOpenIds, ["ou_123"]);
 });
 
+test("createBridgeApp passes file input feature flag to event handler", async () => {
+  const messages = [];
+  const app = createBridgeApp({
+    env: {
+      FCA_ALLOWED_OPEN_IDS: "ou_123",
+      FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex",
+      FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
+      FCA_FEISHU_FILE_INPUTS_ENABLED: "true",
+    },
+    codexAppServerFactory: () => ({
+      start: async () => ({
+        onEvent: () => () => {},
+      }),
+    }),
+    feishuTransport: {
+      sendMessage: async (payload) => {
+        messages.push(payload);
+        return { data: { message_id: "om_notice" } };
+      },
+    },
+    threadStoreFactory: () => ({
+      getThread: async () => null,
+      saveThread: async () => {},
+    }),
+    messageDedupStoreFactory: emptyMessageDedupStore,
+  });
+
+  await app.start();
+  const result = await app.eventHandler.handleMessageReceive({
+    event: {
+      sender: { sender_id: { open_id: "ou_123" } },
+      message: {
+        message_id: "om_file_enabled",
+        chat_id: "oc_123",
+        chat_type: "p2p",
+        message_type: "file",
+        content: JSON.stringify({ file_key: "file_secret", file_name: "secret.txt" }),
+      },
+    },
+  });
+
+  assert.deepEqual(result, {
+    status: "handled",
+    reason: "Feishu attachment input is eligible",
+    attachmentKind: "file",
+  });
+  assert.equal(messages.length, 1);
+  assert.equal(JSON.stringify(messages).includes("file_secret"), false);
+  assert.equal(JSON.stringify(messages).includes("secret.txt"), false);
+  assert.match(messages[0].content, /当前不会下载附件/);
+});
+
 test("createBridgeApp exposes sanitized runtime diagnostics", async () => {
   const wsStatus = {
     active: true,

@@ -7,6 +7,7 @@ import {
   parseCardActionEvent,
   UnsupportedFeishuCardActionError,
 } from "./card-action-parser.js";
+import { decideAttachmentInput } from "./attachment-policy.js";
 
 export class FeishuEventHandler {
   #runtime;
@@ -18,6 +19,7 @@ export class FeishuEventHandler {
   #maxEventAgeMs;
   #messageDedupStore;
   #unsupportedMessageClient;
+  #feishuFileInputsEnabled;
   #logger;
   #seenMessageIds = new Set();
   #chatQueues = new Map();
@@ -32,6 +34,7 @@ export class FeishuEventHandler {
     maxEventAgeMs = 5 * 60 * 1000,
     messageDedupStore = null,
     unsupportedMessageClient = null,
+    feishuFileInputsEnabled = false,
     logger = null,
   }) {
     this.#runtime = runtime;
@@ -43,6 +46,7 @@ export class FeishuEventHandler {
     this.#maxEventAgeMs = maxEventAgeMs;
     this.#messageDedupStore = messageDedupStore;
     this.#unsupportedMessageClient = unsupportedMessageClient;
+    this.#feishuFileInputsEnabled = feishuFileInputsEnabled;
     this.#logger = logger ?? {
       info: () => {},
     };
@@ -173,9 +177,16 @@ export class FeishuEventHandler {
 
   async #handleUnsupportedMessageType(payload) {
     const envelope = parseUnsupportedMessageEnvelope(payload);
+    const decision = decideAttachmentInput(envelope, {
+      enabled: this.#feishuFileInputsEnabled,
+    });
     const messageId = envelope.messageId;
-    if (!messageId || !envelope.chatId || envelope.chatType !== "p2p") {
-      return { status: "skipped", reason: "Only text messages are supported" };
+    if (decision.action === "skip") {
+      return {
+        status: "skipped",
+        reason: decision.reason,
+        attachmentKind: decision.attachmentKind,
+      };
     }
     if (this.#seenMessageIds.has(messageId) || (await this.#hasSeenMessage(messageId))) {
       return { status: "skipped", reason: "Duplicate Feishu message" };
@@ -185,18 +196,22 @@ export class FeishuEventHandler {
     await this.#markSeenMessage(messageId);
 
     if (!this.#unsupportedMessageClient?.sendTextMessage) {
-      return { status: "skipped", reason: "Only text messages are supported" };
+      return {
+        status: "skipped",
+        reason: decision.reason,
+        attachmentKind: decision.attachmentKind,
+      };
     }
 
     await this.#unsupportedMessageClient.sendTextMessage({
       chatId: envelope.chatId,
-      text: "暂不支持文件、图片、文档或语音消息。请先发送文本任务；文件下载与回传能力将在后续版本开放。",
+      text: attachmentDecisionNotice(decision),
     });
 
     return {
       status: "handled",
-      reason: "Unsupported Feishu message type notified",
-      attachmentKind: envelope.attachmentKind,
+      reason: decision.reason,
+      attachmentKind: decision.attachmentKind,
     };
   }
 
@@ -353,6 +368,16 @@ const UNSUPPORTED_TEXT_COMMANDS = [
     text: "暂不支持在飞书内修改 Codex 权限策略。当前版本仍使用本地已配置的权限边界；后续开放 /permission 时会先加入确认、审计和最小权限校验。",
   },
 ];
+
+function attachmentDecisionNotice(decision) {
+  if (decision.action === "eligible") {
+    return "飞书附件输入能力尚未完成下载和审批闭环，当前不会下载附件。请先发送文本任务。";
+  }
+  if (decision.action === "notify_unsupported") {
+    return "暂不支持该类型的飞书消息。请先发送文本任务。";
+  }
+  return "暂不支持文件、图片、文档或语音消息。请先发送文本任务；文件下载与回传能力将在后续版本开放。";
+}
 
 function matchUnsupportedTextCommand(text) {
   const normalized = text.trim();
