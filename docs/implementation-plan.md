@@ -131,7 +131,7 @@ Done 标准：
 - app-server JSON-RPC server request 已进入分发层；approval request 会把任务切到 `waiting_approval`、更新脱敏卡片，并通过飞书按钮回写 app-server decision；无人处理超时后默认回写 `decline`。
 - 审批卡片已支持“查看详情”按钮，在同一卡片展开更多脱敏摘要，不展示命令正文、diff、完整路径或原始 payload。
 - app-server 子进程退出已转换为 `appServer/disconnected` 本地事件；runtime 会把 active task 标记为 failed，失败卡片先同步一次，再进入最终同步和 `task.failed` 日志。
-- `runDev` 已注册 `SIGINT` / `SIGTERM` 停机钩子，收到退出信号后记录 `bridge.shutdown_requested`，依次停止 Codex app-server 和飞书 transport，再记录 `bridge.stopped`。
+- `runDev` 已注册 `SIGINT` / `SIGTERM` 停机钩子，收到退出信号后记录 `bridge.shutdown_requested`，依次停止 Codex app-server 和飞书 transport；成功时记录 `bridge.stopped`，失败时记录 `bridge.shutdown_failed`，且 app 停止失败仍会继续尝试停止飞书 transport。
 - `FCA_APPROVAL_TIMEOUT_SECONDS` 已提供审批请求等待时间配置；超时后会记录 `task.approval_timeout` 并 best-effort 同步卡片。
 - 审批卡片已展示风险等级、固定枚举风险因素和脱敏范围摘要，包括目录别名、命令动作类型数量、文件变更数量和扩展名、权限读写数量、网络目标域名。
 - Thread Store 默认继续使用 JSON 文件，并已支持 `FCA_THREAD_STORE_DRIVER=sqlite` 的可选 SQLite 后端。

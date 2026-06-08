@@ -206,3 +206,68 @@ test("runDev registers shutdown signal handlers and stops resources", async () =
   assert.equal(logs.some((entry) => entry.event === "bridge.shutdown_requested" && entry.signal === "SIGTERM"), true);
   assert.equal(logs.some((entry) => entry.event === "bridge.stopped" && entry.signal === "SIGTERM"), true);
 });
+
+test("runDev logs shutdown failures and still stops transport", async () => {
+  const calls = [];
+  const signalHandlers = {};
+  let logText = "";
+  const transport = {
+    probeBot: async () => ({ ok: true, botOpenId: "ou_bot", botName: "Codex" }),
+    startMessageListener: async () => {
+      calls.push("listen");
+    },
+    stop: async () => {
+      calls.push("transport.stop");
+    },
+  };
+  const app = {
+    config: { defaultWorkdir: "F:\\development\\f-codex" },
+    start: async () => {
+      calls.push("app.start");
+    },
+    stop: async () => {
+      calls.push("app.stop");
+      throw new Error("app stop failed");
+    },
+  };
+
+  const exitCode = await runDev({
+    env: {
+      FEISHU_APP_ID: "cli_123",
+      FEISHU_APP_SECRET: "secret",
+      FCA_ALLOWED_OPEN_IDS: "ou_123",
+      FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex",
+      FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
+    },
+    output: { write: () => {} },
+    errorOutput: { write: (text) => (logText += text) },
+    transportFactory: () => transport,
+    appFactory: () => app,
+    signalRegistrar: {
+      on: (signal, handler) => {
+        signalHandlers[signal] = handler;
+      },
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  await assert.rejects(() => signalHandlers.SIGTERM(), /app stop failed/);
+
+  assert.deepEqual(calls, ["app.start", "listen", "app.stop", "transport.stop"]);
+  const logs = logText
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  assert.equal(logs.some((entry) => entry.event === "bridge.shutdown_requested" && entry.signal === "SIGTERM"), true);
+  assert.equal(
+    logs.some(
+      (entry) =>
+        entry.event === "bridge.shutdown_failed" &&
+        entry.signal === "SIGTERM" &&
+        entry.errorSummary === "app stop failed" &&
+        entry.errorName === "Error",
+    ),
+    true,
+  );
+  assert.equal(logs.some((entry) => entry.event === "bridge.stopped"), false);
+});
