@@ -738,6 +738,86 @@ test("stop logs and propagates WS close failures", async () => {
   });
 });
 
+test("getMessageListenerStatus reports idle before WS listener starts", () => {
+  const transport = new FeishuSdkTransport({
+    appId: "cli_123",
+    appSecret: "secret",
+    createClient: () => ({}),
+  });
+
+  assert.deepEqual(transport.getMessageListenerStatus(), {
+    active: false,
+    autoReconnect: true,
+    state: "idle",
+    lastConnectTime: null,
+    nextConnectTime: null,
+    reconnectAttempts: 0,
+  });
+});
+
+test("getMessageListenerStatus returns sanitized SDK connection status", async () => {
+  const transport = new FeishuSdkTransport({
+    appId: "cli_123",
+    appSecret: "secret",
+    autoReconnect: false,
+    createClient: () => ({}),
+    createEventDispatcher: () => ({
+      register: () => {},
+    }),
+    createWsClient: () => ({
+      start: async () => {},
+      getConnectionStatus: () => ({
+        state: "reconnecting",
+        lastConnectTime: 1000,
+        nextConnectTime: 2000,
+        reconnectAttempts: 3,
+        appSecret: "should_not_escape",
+      }),
+    }),
+  });
+
+  await transport.startMessageListener({
+    onMessageReceive: async () => {},
+  });
+
+  assert.deepEqual(transport.getMessageListenerStatus(), {
+    active: true,
+    autoReconnect: false,
+    state: "reconnecting",
+    lastConnectTime: 1000,
+    nextConnectTime: 2000,
+    reconnectAttempts: 3,
+  });
+  assert.equal(JSON.stringify(transport.getMessageListenerStatus()).includes("should_not_escape"), false);
+});
+
+test("getMessageListenerStatus handles SDK clients without status support", async () => {
+  const transport = new FeishuSdkTransport({
+    appId: "cli_123",
+    appSecret: "secret",
+    createClient: () => ({}),
+    createEventDispatcher: () => ({
+      register: () => {},
+    }),
+    createWsClient: () => ({
+      start: async () => {},
+    }),
+  });
+
+  await transport.startMessageListener({
+    onMessageReceive: async () => {},
+  });
+
+  assert.deepEqual(transport.getMessageListenerStatus(), {
+    active: true,
+    autoReconnect: true,
+    state: "unknown",
+    lastConnectTime: null,
+    nextConnectTime: null,
+    reconnectAttempts: null,
+  });
+});
+
 test("startMessageListener closes previous WS client before replacing it", async () => {
   const calls = [];
   let wsId = 0;

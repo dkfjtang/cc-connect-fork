@@ -104,6 +104,17 @@ TaskCardController
 
 `FeishuSdkTransport` 默认把 `autoReconnect=true` 传给 SDK `WSClient`，并把 SDK 的 reconnecting / reconnected / error callback 转成 `feishu.ws_reconnecting`、`feishu.ws_reconnected`、`feishu.ws_error`。需要排查 SDK 重连行为或避免测试环境自动重连时，可设置 `FCA_FEISHU_WS_AUTO_RECONNECT=false`。
 
+`FeishuSdkTransport.getMessageListenerStatus()` 会返回长连接脱敏快照：
+
+- `active`
+- `autoReconnect`
+- `state`
+- `lastConnectTime`
+- `nextConnectTime`
+- `reconnectAttempts`
+
+该方法只读取 SDK `getConnectionStatus()` 的生命周期字段；未启动时返回 `active=false` / `state=idle`，旧 SDK 不支持状态接口时返回 `state=unknown`。返回值不包含 `appSecret`、verification token、encrypt key、事件 payload 或 SDK client 实例。
+
 `runDev` 会注册 `SIGINT` / `SIGTERM` 退出信号。收到信号后，Bridge 先停止 Codex app-server，再 best-effort 调用 transport `stop()`；SDK transport 会通过 `WSClient.close({})` 关闭已启动的长连接，并记录关闭成功或失败。停机失败会记录 `bridge.shutdown_failed`、首个错误摘要和 `failedResources`，但不会输出额外敏感信息。
 
 ## 卡片更新重试

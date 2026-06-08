@@ -260,6 +260,35 @@ export class FeishuSdkTransport {
     }
   }
 
+  getMessageListenerStatus() {
+    if (!this.#wsClient) {
+      return {
+        active: false,
+        autoReconnect: this.#autoReconnect,
+        state: "idle",
+        lastConnectTime: null,
+        nextConnectTime: null,
+        reconnectAttempts: 0,
+      };
+    }
+
+    const status =
+      typeof this.#wsClient.getConnectionStatus === "function"
+        ? this.#wsClient.getConnectionStatus()
+        : null;
+
+    return {
+      active: true,
+      autoReconnect: this.#autoReconnect,
+      state: typeof status?.state === "string" ? status.state : "unknown",
+      lastConnectTime: Number.isFinite(status?.lastConnectTime) ? status.lastConnectTime : null,
+      nextConnectTime: Number.isFinite(status?.nextConnectTime) ? status.nextConnectTime : null,
+      reconnectAttempts: Number.isFinite(status?.reconnectAttempts)
+        ? status.reconnectAttempts
+        : null,
+    };
+  }
+
   async #client() {
     if (!this.#clientPromise) {
       this.#clientPromise = Promise.resolve(

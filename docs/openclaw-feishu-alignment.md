@@ -119,6 +119,7 @@ fca 映射：
 - `FeishuSdkTransport.startMessageListener()` 保持 `EventDispatcher + WSClient` 入口，但不引入 OpenClaw 的多账号 channel monitor。
 - `FeishuSdkTransport.startMessageListener()` 重建 listener 前会先关闭旧 `WSClient`，启动失败时也会 best-effort 清理半初始化 client，避免重复长连接残留。
 - `FeishuSdkTransport` 默认透传 SDK `autoReconnect=true`，并将 SDK reconnecting / reconnected / error callback 转为结构化日志；测试或特殊排障场景可用 `FCA_FEISHU_WS_AUTO_RECONNECT=false` 关闭 SDK 自动重连。
+- `FeishuSdkTransport.getMessageListenerStatus()` 提供长连接脱敏快照，字段限定为 active、autoReconnect、state、last/next connect time 和 reconnectAttempts，供后续 `/status` 或运维探针复用。
 - `runDev` 将同一个 JSONL logger 注入 transport 和 runtime，保证飞书连接、入站事件、Codex task 日志在同一日志流里关联。
 - 新增 `feishu.ws_starting`、`feishu.ws_dispatcher_created`、`feishu.ws_handlers_registered`、`feishu.ws_client_created`、`feishu.ws_started`、`feishu.ws_reconnecting`、`feishu.ws_reconnected`、`feishu.ws_error`、`feishu.ws_start_failed`、`feishu.ws_cleanup_failed`、`feishu.ws_stopped` 和 `feishu.ws_stop_failed`。
 - 新增 `feishu.event_received` 和 `feishu.event_handler_failed`，只记录 `appId`、event type、`message_id`、`chat_id`、`chat_type` 和错误摘要。
