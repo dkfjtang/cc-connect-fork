@@ -9,7 +9,8 @@
     "dev": "node scripts/dev.mjs",
     "migrate:thread-store": "node scripts/migrate-thread-store.mjs",
     "smoke:codex": "node scripts/smoke-codex-turn.mjs",
-    "test": "node --test"
+    "test": "node --test --test-concurrency=1",
+    "test:parallel": "node --test"
   },
   "dependencies": {
     "@larksuiteoapi/node-sdk": "^1.66.1"

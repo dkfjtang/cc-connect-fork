@@ -52,6 +52,8 @@
 npm test
 ```
 
+`npm test` 默认使用 Node test runner 的低并发模式，优先保证 Windows 本地和 Codex 桌面环境稳定。资源充足且需要并发跑测试时，可使用 `npm run test:parallel`。
+
 当前测试覆盖 Codex JSON-RPC client、app-server session、JSON-RPC server request 分发、approval request 默认安全拒绝、飞书 approval 按钮回调、stdio JSONL channel、app-server 子进程封装、streamed delta 输出聚合、阶段状态展示、token usage footer/logging、运行态状态转换、会话维度 thread 映射、JSON/SQLite thread store、thread store 迁移、配置解析、访问策略、飞书私聊/群聊 @ 文本事件解析、飞书任务卡片渲染、卡片发送/更新动作、文本编排和 smoke CLI 参数。
 
 ## 常用脚本

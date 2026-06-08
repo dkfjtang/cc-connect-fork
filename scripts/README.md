@@ -12,6 +12,8 @@
 npm test
 ```
 
+`npm test` 使用低并发稳定模式，适合 Windows 本地验证；资源充足时可用 `npm run test:parallel` 跑 Node 默认并发模式。
+
 ```powershell
 npm run check-config
 ```
