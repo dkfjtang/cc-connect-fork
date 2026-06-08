@@ -65,6 +65,7 @@ function footerText(snapshot) {
     snapshot.threadId ? `thread: ${shortId(snapshot.threadId)}` : null,
     snapshot.turnId ? `turn: ${shortId(snapshot.turnId)}` : null,
     typeof snapshot.elapsedMs === "number" ? `耗时: ${formatElapsed(snapshot.elapsedMs)}` : null,
+    tokenUsageText(snapshot.tokenUsage),
     snapshot.model ? `model: ${snapshot.model}` : null,
     snapshot.appVersion ? `fca: ${snapshot.appVersion}` : null,
     snapshot.errorType ? `错误: ${snapshot.errorType}` : null,
@@ -72,6 +73,29 @@ function footerText(snapshot) {
   ]
     .filter(Boolean)
     .join(" | ");
+}
+
+function tokenUsageText(tokenUsage) {
+  if (!tokenUsage?.total) {
+    return null;
+  }
+
+  const total = tokenUsage.total.totalTokens;
+  const cached = tokenUsage.total.cachedInputTokens;
+  const contextWindow = tokenUsage.modelContextWindow;
+  const parts = [];
+
+  if (Number.isFinite(total)) {
+    parts.push(`tokens: ${formatCompactNumber(total)}`);
+  }
+  if (Number.isFinite(cached) && cached > 0) {
+    parts.push(`cache: ${formatCompactNumber(cached)}`);
+  }
+  if (Number.isFinite(total) && Number.isFinite(contextWindow) && contextWindow > 0) {
+    parts.push(`ctx: ${formatPercent(total / contextWindow)}`);
+  }
+
+  return parts.length > 0 ? parts.join(" / ") : null;
 }
 
 function shortId(value) {
@@ -88,6 +112,22 @@ function formatElapsed(elapsedMs) {
   const minutes = Math.floor(wholeSeconds / 60);
   const remainingSeconds = wholeSeconds % 60;
   return `${minutes}m ${remainingSeconds}s`;
+}
+
+function formatCompactNumber(value) {
+  if (value < 1000) {
+    return `${value}`;
+  }
+
+  if (value < 1_000_000) {
+    return `${Number((value / 1000).toFixed(1))}k`;
+  }
+
+  return `${Number((value / 1_000_000).toFixed(1))}m`;
+}
+
+function formatPercent(value) {
+  return `${Math.round(value * 100)}%`;
 }
 
 function truncate(value, limit) {

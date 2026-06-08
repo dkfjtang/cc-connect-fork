@@ -18,6 +18,7 @@ export class RuntimeTask {
   #status = "queued";
   #errorSummary = null;
   #errorType = null;
+  #tokenUsage = null;
   #output;
 
   constructor({
@@ -78,6 +79,9 @@ export class RuntimeTask {
       case "turn/completed":
         this.#handleTurnCompleted(event.params);
         break;
+      case "thread/tokenUsage/updated":
+        this.#handleTokenUsageUpdated(event.params);
+        break;
       default:
         break;
     }
@@ -104,7 +108,20 @@ export class RuntimeTask {
       finalText: this.#output.finalText(),
       errorSummary: this.#errorSummary,
       errorType: this.#errorType,
+      tokenUsage: this.#tokenUsage,
     };
+  }
+
+  #handleTokenUsageUpdated(params = {}) {
+    if (params.threadId) {
+      this.#threadId = params.threadId;
+    }
+    if (params.turnId) {
+      this.#turnId = params.turnId;
+    }
+    if (params.tokenUsage) {
+      this.#tokenUsage = params.tokenUsage;
+    }
   }
 
   #handleTurnCompleted(params = {}) {

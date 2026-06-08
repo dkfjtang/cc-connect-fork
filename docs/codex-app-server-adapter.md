@@ -158,6 +158,7 @@ request_id -> resolver
 | `item/started` | 记录当前 item | 可低频更新阶段摘要 |
 | `item/agentMessage/delta` | 追加到 output buffer | 节流更新卡片正文摘要 |
 | `item/completed` | 记录 item 完成 | 更新最近阶段 |
+| `thread/tokenUsage/updated` | 记录 token usage | 更新 footer 的 tokens / cache / context 指标 |
 | approval 类事件 | status = waiting_approval | 后续生成审批卡片 |
 | `turn/completed` success | status = completed | 更新最终卡片 |
 | `turn/completed` failure | status = failed | 更新失败卡片 |

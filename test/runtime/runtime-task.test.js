@@ -36,6 +36,7 @@ test("new runtime task starts queued with Feishu context", () => {
     finalText: "",
     errorSummary: null,
     errorType: null,
+    tokenUsage: null,
   });
 });
 
@@ -96,6 +97,41 @@ test("turn failure records a readable error summary", () => {
   assert.equal(snapshot.status, "failed");
   assert.equal(snapshot.errorSummary, "Tool approval denied");
   assert.equal(snapshot.errorType, "approval_denied");
+});
+
+test("token usage notification updates task diagnostics", () => {
+  const task = new RuntimeTask({ taskId: "task_123" });
+
+  task.handleCodexEvent({
+    method: "thread/tokenUsage/updated",
+    params: {
+      threadId: "thr_123",
+      turnId: "turn_123",
+      tokenUsage: {
+        last: {
+          inputTokens: 100,
+          cachedInputTokens: 20,
+          outputTokens: 30,
+          reasoningOutputTokens: 5,
+          totalTokens: 135,
+        },
+        total: {
+          inputTokens: 1000,
+          cachedInputTokens: 400,
+          outputTokens: 300,
+          reasoningOutputTokens: 50,
+          totalTokens: 1350,
+        },
+        modelContextWindow: 8000,
+      },
+    },
+  });
+
+  const snapshot = task.snapshot();
+  assert.equal(snapshot.threadId, "thr_123");
+  assert.equal(snapshot.turnId, "turn_123");
+  assert.equal(snapshot.tokenUsage.total.totalTokens, 1350);
+  assert.equal(snapshot.tokenUsage.total.cachedInputTokens, 400);
 });
 
 test("cancel marks task cancelled with readable reason", () => {

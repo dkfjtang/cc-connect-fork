@@ -35,6 +35,16 @@ test("renderTaskCard renders running status with thread and turn footer", () => 
     model: "gpt-5.1-codex",
     appVersion: "0.2.0-test",
     elapsedMs: 3500,
+    tokenUsage: {
+      total: {
+        inputTokens: 7000,
+        cachedInputTokens: 2500,
+        outputTokens: 2000,
+        reasoningOutputTokens: 500,
+        totalTokens: 9500,
+      },
+      modelContextWindow: 38000,
+    },
     errorSummary: null,
     errorType: null,
   });
@@ -44,6 +54,9 @@ test("renderTaskCard renders running status with thread and turn footer", () => 
   assert.match(card.elements.at(-1).elements[0].content, /thread: thr_1234/);
   assert.match(card.elements.at(-1).elements[0].content, /turn: turn_123/);
   assert.match(card.elements.at(-1).elements[0].content, /耗时: 3\.5s/);
+  assert.match(card.elements.at(-1).elements[0].content, /tokens: 9\.5k/);
+  assert.match(card.elements.at(-1).elements[0].content, /cache: 2\.5k/);
+  assert.match(card.elements.at(-1).elements[0].content, /ctx: 25%/);
   assert.match(card.elements.at(-1).elements[0].content, /model: gpt-5.1-codex/);
   assert.match(card.elements.at(-1).elements[0].content, /fca: 0.2.0-test/);
 });

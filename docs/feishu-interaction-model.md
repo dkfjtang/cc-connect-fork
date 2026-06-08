@@ -127,6 +127,7 @@ footer 只展示排障有用、但不泄露敏感信息的字段。
 - Codex thread：短 id
 - Codex turn：短 id
 - 运行时长
+- token/cache/context：收到 `thread/tokenUsage/updated` 后展示总 token、缓存输入 token 和上下文窗口占用比例
 - 模型：如已配置可展示
 - fca 版本：后续实现后展示
 
@@ -149,6 +150,7 @@ footer 只展示排障有用、但不泄露敏感信息的字段。
 | `item/started` | 更新当前阶段摘要 |
 | `item/agentMessage/delta` | 聚合文本 delta，不逐字更新 |
 | `item/completed` | 更新阶段完成摘要 |
+| `thread/tokenUsage/updated` | 更新 footer token / cache / context 指标 |
 | approval 类事件 | 卡片状态改为 waiting_approval |
 | `turn/completed` success | 卡片状态改为 completed |
 | `turn/completed` failure | 卡片状态改为 failed |

@@ -579,6 +579,67 @@ test("handleTextMessage logs failed terminal state with error summary", async ()
   assert.equal(typeof logEntries.at(-1).elapsedMs, "number");
 });
 
+test("handleTextMessage logs token usage diagnostics", async () => {
+  let emitEvent;
+  const logEntries = [];
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession({
+      onEvent: (handler) => {
+        emitEvent = handler;
+        return () => {};
+      },
+      startTurnHook: () => {
+        queueMicrotask(() => {
+          emitEvent({
+            method: "thread/tokenUsage/updated",
+            params: {
+              threadId: "thr_new",
+              turnId: "turn_new",
+              tokenUsage: {
+                last: {
+                  inputTokens: 100,
+                  cachedInputTokens: 50,
+                  outputTokens: 25,
+                  reasoningOutputTokens: 5,
+                  totalTokens: 130,
+                },
+                total: {
+                  inputTokens: 1000,
+                  cachedInputTokens: 500,
+                  outputTokens: 250,
+                  reasoningOutputTokens: 50,
+                  totalTokens: 1300,
+                },
+                modelContextWindow: 8000,
+              },
+            },
+          });
+          emitEvent({ method: "turn/completed", params: { status: "success" } });
+        });
+      },
+    }),
+    cardController: fakeCardController(),
+    logger: fakeLogger(logEntries),
+  });
+
+  await runtime.handleTextMessage({
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_123",
+    text: "hello",
+  });
+
+  assert.equal(logEntries.at(-1).event, "task.completed");
+  assert.equal(logEntries.at(-1).tokenTotal, 1300);
+  assert.equal(logEntries.at(-1).tokenCachedInput, 500);
+  assert.equal(logEntries.at(-1).tokenInput, 1000);
+  assert.equal(logEntries.at(-1).tokenOutput, 250);
+  assert.equal(logEntries.at(-1).tokenReasoningOutput, 50);
+  assert.equal(logEntries.at(-1).modelContextWindow, 8000);
+});
+
 test("handleTextMessage logs thrown turn errors with trace fields", async () => {
   const logEntries = [];
   const runtime = new BridgeRuntime({

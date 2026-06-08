@@ -261,6 +261,7 @@ export class BridgeRuntime {
       elapsedMs: snapshot.elapsedMs,
       errorSummary: snapshot.errorSummary,
       errorType: snapshot.errorType,
+      ...tokenUsageLogFields(snapshot.tokenUsage),
       ...extraFields,
     };
     if (snapshot.feishuChatType) {
@@ -278,6 +279,21 @@ export class BridgeRuntime {
 
     return this.#groupDeveloperInstructions.get(chatId) ?? null;
   }
+}
+
+function tokenUsageLogFields(tokenUsage) {
+  if (!tokenUsage?.total) {
+    return {};
+  }
+
+  return {
+    tokenTotal: tokenUsage.total.totalTokens,
+    tokenCachedInput: tokenUsage.total.cachedInputTokens,
+    tokenInput: tokenUsage.total.inputTokens,
+    tokenOutput: tokenUsage.total.outputTokens,
+    tokenReasoningOutput: tokenUsage.total.reasoningOutputTokens,
+    modelContextWindow: tokenUsage.modelContextWindow,
+  };
 }
 
 function threadMappingFields({ openId, chatId, chatType, cwd }) {
