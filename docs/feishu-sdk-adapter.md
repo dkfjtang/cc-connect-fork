@@ -124,6 +124,8 @@ TaskCardController
 
 `feishu.messageListener` 只保留上述长连接快照字段，用于后续 `/status` 或运维探针复用。
 
+`runDev` 在飞书 listener 启动后会把该快照写入 `bridge.diagnostics` JSONL 日志。该日志仍只包含裁剪后的 active/state/reconnect 字段，不输出 app secret、verification token、encrypt key、原始事件或 SDK client。
+
 `runDev` 会注册 `SIGINT` / `SIGTERM` 退出信号。收到信号后，Bridge 先停止 Codex app-server，再 best-effort 调用 transport `stop()`；SDK transport 会通过 `WSClient.close({})` 关闭已启动的长连接，并记录关闭成功或失败。停机失败会记录 `bridge.shutdown_failed`、首个错误摘要和 `failedResources`，但不会输出额外敏感信息。
 
 ## 卡片更新重试

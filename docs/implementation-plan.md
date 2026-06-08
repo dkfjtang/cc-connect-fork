@@ -120,7 +120,7 @@ Done 标准：
 - `runDev` 已按 `FCA_LOG_LEVEL` 创建 JSONL logger，并写入 stderr，便于容器或本机进程采集；同一个 logger 已贯穿飞书 SDK transport 和 runtime。
 - `FeishuSdkTransport` 已记录 WebSocket 启动阶段、事件收到和 handler 失败日志，字段不包含 app secret、消息正文或完整事件 payload。
 - `FCA_FEISHU_WS_AUTO_RECONNECT` 已支持控制飞书 SDK `WSClient` 自动重连，默认 `true`；SDK reconnecting / reconnected / error callback 会进入脱敏 JSONL 日志。
-- `FeishuSdkTransport.getMessageListenerStatus()` 和 `createBridgeApp().getDiagnostics()` 已提供长连接与运行态脱敏状态快照，便于后续 `/status` 或运维探针复用。
+- `FeishuSdkTransport.getMessageListenerStatus()` 和 `createBridgeApp().getDiagnostics()` 已提供长连接与运行态脱敏状态快照；`runDev` 启动监听后会写入 `bridge.diagnostics` 脱敏 JSONL 日志，便于后续 `/status` 或运维探针复用。
 - `FeishuEventHandler` 已记录 `feishu.message_handled` / `feishu.message_skipped` gate 结果和处理耗时，字段只包含 message/chat 维度、result status、duration、task status 或跳过原因，不记录消息正文、附件 key、文件名或完整 payload。
 - `FeishuMessageClient` 已将飞书 API `code/msg` 和 transport 异常归一为 `FeishuApiError`，结构化日志会记录 `errorName`、`errorCode` 和 `errorActionType`。
 - `TaskCardController` 已串行化同一卡片的 send / update，避免运行中 patch 与最终态 patch 并发乱序。

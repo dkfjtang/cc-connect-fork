@@ -60,6 +60,7 @@ export async function runDev({
     onMessageReceive: (payload) => app.eventHandler.handleMessageReceive(payload),
     onCardAction: (payload) => app.eventHandler.handleCardAction(payload),
   });
+  logger.info("bridge.diagnostics", sanitizeBridgeDiagnostics(app.getDiagnostics?.()));
   registerShutdownHandlers({
     signalRegistrar,
     logger,
@@ -124,4 +125,51 @@ function errorLogFields(error) {
     fields.errorName = error.name;
   }
   return fields;
+}
+
+function sanitizeBridgeDiagnostics(diagnostics) {
+  if (!diagnostics || typeof diagnostics !== "object") {
+    return {
+      appServer: { active: null },
+      runtime: { active: null },
+      eventHandler: { active: null },
+      feishu: { messageListener: null },
+    };
+  }
+
+  return {
+    appServer: {
+      active: booleanOrNull(diagnostics.appServer?.active),
+    },
+    runtime: {
+      active: booleanOrNull(diagnostics.runtime?.active),
+    },
+    eventHandler: {
+      active: booleanOrNull(diagnostics.eventHandler?.active),
+    },
+    feishu: {
+      messageListener: sanitizeMessageListenerStatus(diagnostics.feishu?.messageListener),
+    },
+  };
+}
+
+function sanitizeMessageListenerStatus(status) {
+  if (!status || typeof status !== "object") {
+    return null;
+  }
+
+  return {
+    active: booleanOrNull(status.active),
+    autoReconnect: booleanOrNull(status.autoReconnect),
+    state: typeof status.state === "string" ? status.state : "unknown",
+    lastConnectTime: Number.isFinite(status.lastConnectTime) ? status.lastConnectTime : null,
+    nextConnectTime: Number.isFinite(status.nextConnectTime) ? status.nextConnectTime : null,
+    reconnectAttempts: Number.isFinite(status.reconnectAttempts)
+      ? status.reconnectAttempts
+      : null,
+  };
+}
+
+function booleanOrNull(value) {
+  return typeof value === "boolean" ? value : null;
 }

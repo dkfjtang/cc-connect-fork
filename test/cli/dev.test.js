@@ -141,6 +141,77 @@ test("runDev passes disabled Feishu WS reconnect option to sdk transport", async
   assert.equal(calls[0].autoReconnect, false);
 });
 
+test("runDev logs sanitized bridge diagnostics after listener starts", async () => {
+  let logText = "";
+  const transport = {
+    probeBot: async () => ({ ok: true, botOpenId: "ou_bot", botName: "Codex" }),
+    startMessageListener: async () => {},
+  };
+
+  const exitCode = await runDev({
+    env: {
+      FEISHU_APP_ID: "cli_123",
+      FEISHU_APP_SECRET: "secret",
+      FCA_ALLOWED_OPEN_IDS: "ou_123",
+      FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex",
+      FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
+    },
+    output: { write: () => {} },
+    errorOutput: { write: (text) => (logText += text) },
+    transportFactory: () => transport,
+    appFactory: () => ({
+      config: { defaultWorkdir: "F:\\development\\f-codex" },
+      start: async () => {},
+      eventHandler: {
+        handleMessageReceive: async () => {},
+        handleCardAction: async () => {},
+      },
+      getDiagnostics: () => ({
+        appServer: { active: true, secret: "should_not_escape" },
+        runtime: { active: true },
+        eventHandler: { active: true },
+        feishu: {
+          messageListener: {
+            active: true,
+            autoReconnect: true,
+            state: "connected",
+            lastConnectTime: 1000,
+            nextConnectTime: null,
+            reconnectAttempts: 0,
+            appSecret: "should_not_escape",
+          },
+        },
+      }),
+    }),
+  });
+
+  assert.equal(exitCode, 0);
+  const diagnostics = logText
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line))
+    .find((entry) => entry.event === "bridge.diagnostics");
+  assert.deepEqual(diagnostics, {
+    timestamp: diagnostics.timestamp,
+    level: "info",
+    event: "bridge.diagnostics",
+    appServer: { active: true },
+    runtime: { active: true },
+    eventHandler: { active: true },
+    feishu: {
+      messageListener: {
+        active: true,
+        autoReconnect: true,
+        state: "connected",
+        lastConnectTime: 1000,
+        nextConnectTime: null,
+        reconnectAttempts: 0,
+      },
+    },
+  });
+  assert.equal(logText.includes("should_not_escape"), false);
+});
+
 function withoutLogger(options) {
   const { logger, ...rest } = options;
   return rest;
