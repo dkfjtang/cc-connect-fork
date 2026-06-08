@@ -2,6 +2,7 @@ const DEFAULT_CODEX_BIN = "codex";
 const DEFAULT_CODEX_LISTEN = "stdio://";
 const DEFAULT_LOG_LEVEL = "info";
 const DEFAULT_TURN_TIMEOUT_SECONDS = 900;
+const DEFAULT_THREAD_STORE_PATH = "data/threads.json";
 
 export function loadConfig(env = process.env) {
   const allowedWorkdirs = splitList(env.FCA_ALLOWED_WORKDIRS, ";");
@@ -19,6 +20,7 @@ export function loadConfig(env = process.env) {
     codexListen: env.FCA_CODEX_LISTEN?.trim() || DEFAULT_CODEX_LISTEN,
     codexModel: env.FCA_CODEX_MODEL?.trim() || null,
     logLevel: env.FCA_LOG_LEVEL?.trim() || DEFAULT_LOG_LEVEL,
+    threadStorePath: env.FCA_THREAD_STORE_PATH?.trim() || DEFAULT_THREAD_STORE_PATH,
     turnTimeoutSeconds,
   };
 }

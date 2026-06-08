@@ -24,3 +24,4 @@
 - `feishu/task-card-controller.js`：根据 task 状态同步发送或更新飞书任务卡片。
 - `policy/access-policy.js`：飞书 `open_id` 和本地工作目录白名单校验。
 - `runtime/runtime-task.js`：Codex notification 到 fca task 状态的最小转换。
+- `store/thread-store.js`：飞书用户和工作目录到 Codex thread 的内存/JSON 文件映射。

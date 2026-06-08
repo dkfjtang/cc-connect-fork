@@ -22,6 +22,7 @@
 | `FCA_CODEX_MODEL` | 可选 Codex 模型覆盖。 |
 | `FCA_LOG_LEVEL` | 日志级别。 |
 | `FCA_TURN_TIMEOUT_SECONDS` | 单个 turn 超时时间。 |
+| `FCA_THREAD_STORE_PATH` | 本地 thread 映射 JSON 文件路径。 |
 
 ## 凭据规则
 

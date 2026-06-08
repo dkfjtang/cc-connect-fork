@@ -9,6 +9,7 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
     FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex;F:\\development\\IDSS",
     FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
     FCA_CODEX_BIN: "codex",
+    FCA_THREAD_STORE_PATH: "data\\threads.json",
     FCA_TURN_TIMEOUT_SECONDS: "120",
   });
 
@@ -19,6 +20,7 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
   ]);
   assert.equal(config.defaultWorkdir, "F:\\development\\f-codex");
   assert.equal(config.codexBin, "codex");
+  assert.equal(config.threadStorePath, "data\\threads.json");
   assert.equal(config.turnTimeoutSeconds, 120);
 });
 
@@ -31,6 +33,7 @@ test("loadConfig uses safe local defaults when optional values are missing", () 
   assert.equal(config.codexBin, "codex");
   assert.equal(config.codexListen, "stdio://");
   assert.equal(config.logLevel, "info");
+  assert.equal(config.threadStorePath, "data/threads.json");
   assert.equal(config.turnTimeoutSeconds, 900);
 });
 

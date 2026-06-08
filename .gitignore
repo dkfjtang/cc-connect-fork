@@ -9,6 +9,7 @@ build/
 logs/
 tmp/
 .cache/
+data/
 accounts/
 secrets/
 *.local.json
