@@ -200,7 +200,7 @@ transport payload：
 { cardChannel: "im" }
 ```
 
-如果 action 带有 `cardChannel=cardkit`、`cardId`，且 transport 提供 CardKit 更新方法，会先尝试 `updateCardKitElementContent` 更新稳定正文元素 `fca_body`，以使用 CardKit 的打字机效果；正文局部更新不可用或失败时，继续尝试 `updateCardKitCard` 全量更新，并用 `cardSequence + 1` 作为下一次更新序号。CardKit send / update 方法缺失或失败时，会记录 `feishu.cardkit_fallback`，回退到 `sendMessage` / `patchMessageCard`；update 回退还会把 task 中保存的 `cardChannel` 降级为 `im`，避免后续继续依赖不可用的 CardKit 通道。
+如果 action 带有 `cardChannel=cardkit`、`cardId`，且 transport 提供 CardKit 更新方法，running 状态会先尝试 `updateCardKitElementContent` 更新稳定正文元素 `fca_body`，以使用 CardKit 的打字机效果；正文局部更新不可用或失败时，继续尝试 `updateCardKitCard` 全量更新。非 running 状态直接使用 full update，保证 completed / failed / waiting_approval 的 header、footer 和按钮能同步更新。CardKit send / update 方法缺失或失败时，会记录 `feishu.cardkit_fallback`，回退到 `sendMessage` / `patchMessageCard`；update 回退还会把 task 中保存的 `cardChannel` 降级为 `im`，避免后续继续依赖不可用的 CardKit 通道。
 
 ## CardKit element id
 
@@ -212,7 +212,7 @@ CardKit 转换层会为 legacy IM card 元素补稳定 `element_id`：
 - 分隔线：`fca_divider`
 - footer note：`fca_footer`
 
-已有 `element_id` 不会被覆盖。当前 CardKit update 会优先使用 `fca_body` 做 element content 局部更新；其它元素仍走全量卡片更新。
+已有 `element_id` 不会被覆盖。当前 running 状态的 CardKit update 会优先使用 `fca_body` 做 element content 局部更新；其它状态和其它元素仍走全量卡片更新。
 
 ## 后续接入点
 

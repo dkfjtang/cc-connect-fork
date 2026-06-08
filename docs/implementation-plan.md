@@ -129,7 +129,7 @@ Done 标准：
 - `FCA_CODEX_MODEL` 已贯穿到 Codex `thread/start`、任务 snapshot 和卡片 footer；`FCA_VERSION` 已进入配置检查和 footer。
 - `thread/tokenUsage/updated` 已进入 RuntimeTask snapshot，并在任务卡片 footer 展示 token / cache / context 指标。
 - `FCA_CARD_FOOTER_FIELDS` 已支持可选 footer 字段配置，默认保留 status/thread/turn/elapsed/tokens/model/version/error/cwd，配置检查会输出当前字段列表。
-- `FCA_CARD_CHANNEL` 已支持 `im` / `cardkit` 配置；默认 `im`，显式 `cardkit` 时 SDK transport 会创建 CardKit 卡片实例并发送 `card_id` 消息，运行中正文更新优先走 `fca_body` element content 局部更新和打字机效果，失败后尝试 CardKit full update，再失败或不可用时记录 `feishu.cardkit_fallback` 并回退普通 IM 卡片，保留 card channel / card id / sequence 元数据流转且不记录卡片 payload。
+- `FCA_CARD_CHANNEL` 已支持 `im` / `cardkit` 配置；默认 `im`，显式 `cardkit` 时 SDK transport 会创建 CardKit 卡片实例并发送 `card_id` 消息，running 正文更新优先走 `fca_body` element content 局部更新和打字机效果，非 running 状态保留 full update 以同步 header / footer / 按钮；失败或不可用时记录 `feishu.cardkit_fallback` 并回退普通 IM 卡片，保留 card channel / card id / sequence 元数据流转且不记录卡片 payload。
 - `item/started` / `item/completed` 已进入 RuntimeTask snapshot，并在运行中卡片正文展示安全阶段标签。
 - app-server JSON-RPC server request 已进入分发层；approval request 会把任务切到 `waiting_approval`、更新脱敏卡片，并通过飞书按钮回写 app-server decision；无人处理超时后默认回写 `decline`。
 - 审批卡片已支持“查看详情”按钮，在同一卡片展开更多脱敏摘要，不展示命令正文、diff、完整路径或原始 payload。

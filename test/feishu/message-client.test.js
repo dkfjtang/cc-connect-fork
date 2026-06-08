@@ -250,6 +250,7 @@ test("sendAction updates CardKit body content before full card update", async ()
     cardChannel: "cardkit",
     cardId: "card_123",
     cardSequence: 3,
+    taskStatus: "running",
     card: {
       elements: [
         {
@@ -271,6 +272,48 @@ test("sendAction updates CardKit body content before full card update", async ()
       },
     },
   ]);
+  assert.deepEqual(result, {
+    cardChannel: "cardkit",
+    cardId: "card_123",
+    cardSequence: 4,
+  });
+});
+
+test("sendAction uses CardKit full update for non-running task states", async () => {
+  const calls = [];
+  const client = new FeishuMessageClient({
+    transport: {
+      updateCardKitElementContent: async () => {
+        throw new Error("should not use body content update for terminal state");
+      },
+      updateCardKitCard: async (payload) => {
+        calls.push({ method: "updateCardKitCard", payload });
+        return { data: { sequence: 4 } };
+      },
+      patchMessageCard: async () => {
+        throw new Error("should not use IM fallback");
+      },
+    },
+  });
+
+  const result = await client.sendAction({
+    type: "update",
+    messageId: "om_123",
+    cardChannel: "cardkit",
+    cardId: "card_123",
+    cardSequence: 3,
+    taskStatus: "completed",
+    card: {
+      elements: [
+        {
+          tag: "markdown",
+          text: { tag: "lark_md", content: "最终回复" },
+        },
+      ],
+    },
+  });
+
+  assert.equal(calls[0].method, "updateCardKitCard");
   assert.deepEqual(result, {
     cardChannel: "cardkit",
     cardId: "card_123",
@@ -304,6 +347,7 @@ test("sendAction falls back to CardKit full update when body content update fail
     cardChannel: "cardkit",
     cardId: "card_123",
     cardSequence: 3,
+    taskStatus: "running",
     card: {
       elements: [
         {

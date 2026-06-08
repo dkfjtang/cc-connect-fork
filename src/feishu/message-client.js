@@ -159,6 +159,9 @@ export class FeishuMessageClient {
   }
 
   async #updateCardKitBodyContent(action) {
+    if (action.taskStatus !== "running") {
+      return null;
+    }
     if (typeof this.#transport.updateCardKitElementContent !== "function") {
       return null;
     }

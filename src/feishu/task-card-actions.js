@@ -10,6 +10,7 @@ export function buildTaskCardAction(snapshot, options = {}) {
       cardChannel: snapshot.cardChannel,
       cardId: snapshot.cardId,
       cardSequence: snapshot.cardSequence,
+      taskStatus: snapshot.status,
       card,
     };
   }
