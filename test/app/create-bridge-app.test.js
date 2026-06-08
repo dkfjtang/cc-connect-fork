@@ -125,3 +125,64 @@ test("createBridgeApp passes bot open id to event handler self-echo guard", asyn
 
   assert.deepEqual(result, { status: "skipped", reason: "Self-echo Feishu message" });
 });
+
+test("createBridgeApp passes logger to bridge runtime task handling", async () => {
+  const logEntries = [];
+  let emitted;
+  const app = createBridgeApp({
+    env: {
+      FCA_ALLOWED_OPEN_IDS: "ou_123",
+      FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex",
+      FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
+      FCA_THREAD_STORE_PATH: "ignored.json",
+    },
+    logger: {
+      info: (event, fields) => logEntries.push({ level: "info", event, ...fields }),
+      error: (event, fields) => logEntries.push({ level: "error", event, ...fields }),
+    },
+    codexAppServerFactory: () => ({
+      start: async () => ({
+        onEvent: (handler) => {
+          emitted = handler;
+          return () => {};
+        },
+        startThread: async () => ({ thread: { id: "thr_123" } }),
+        startTurn: async () => {
+          queueMicrotask(() => {
+            emitted({
+              method: "turn/completed",
+              params: { status: "success" },
+            });
+          });
+          return { turn: { id: "turn_123" } };
+        },
+      }),
+    }),
+    feishuTransport: {
+      sendMessage: async () => ({ data: { message_id: "om_card" } }),
+      patchMessageCard: async () => ({ data: {} }),
+    },
+    threadStoreFactory: () => ({
+      getThread: async () => null,
+      saveThread: async () => {},
+    }),
+  });
+
+  await app.start();
+  await app.eventHandler.handleMessageReceive({
+    event: {
+      sender: { sender_id: { open_id: "ou_123" } },
+      message: {
+        message_id: "om_123",
+        chat_id: "oc_123",
+        chat_type: "p2p",
+        message_type: "text",
+        content: JSON.stringify({ text: "hello" }),
+      },
+    },
+  });
+
+  assert.equal(logEntries.at(-1).event, "task.completed");
+  assert.equal(logEntries.at(-1).messageId, "om_123");
+  assert.equal(logEntries.at(-1).turnId, "turn_123");
+});

@@ -100,3 +100,44 @@ test("runDev creates sdk transport, probes bot identity, and starts bridge app",
   assert.equal(typeof calls[3].onMessageReceive, "function");
   assert.match(outputText, /bot Codex \(ou_bot\)/);
 });
+
+test("runDev creates JSON logger from configured log level", async () => {
+  let logText = "";
+  const calls = [];
+  const transport = {
+    probeBot: async () => ({ ok: true, botOpenId: "ou_bot", botName: "Codex" }),
+    startMessageListener: async () => {},
+  };
+
+  const exitCode = await runDev({
+    env: {
+      FEISHU_APP_ID: "cli_123",
+      FEISHU_APP_SECRET: "secret",
+      FCA_ALLOWED_OPEN_IDS: "ou_123",
+      FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex",
+      FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
+      FCA_LOG_LEVEL: "warn",
+    },
+    output: { write: () => {} },
+    errorOutput: { write: (text) => (logText += text) },
+    transportFactory: () => transport,
+    appFactory: (options) => {
+      calls.push(options);
+      options.logger.info("task.completed", { messageId: "msg_123" });
+      options.logger.warn("feishu.retry", { messageId: "msg_123" });
+      return {
+        config: { defaultWorkdir: "F:\\development\\f-codex" },
+        start: async () => {},
+      };
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(JSON.parse(logText), {
+    timestamp: JSON.parse(logText).timestamp,
+    level: "warn",
+    event: "feishu.retry",
+    messageId: "msg_123",
+  });
+});

@@ -112,6 +112,11 @@ Done 标准：
 - 长输出不会导致 Bridge 无响应。
 - 可按 `message_id` 或 `turn_id` 定位一次任务。
 
+当前进展：
+
+- `BridgeRuntime` 已输出 `task.received`、`task.thread_created` / `task.thread_reused`、`task.turn_started`、`task.completed` / `task.failed` / `task.cancelled` 等结构化事件。
+- `runDev` 已按 `FCA_LOG_LEVEL` 创建 JSONL logger，并写入 stderr，便于容器或本机进程采集。
+
 ## M5 下一阶段评估
 
 候选能力：

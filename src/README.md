@@ -9,6 +9,7 @@
 - `policy`：用户白名单、工作目录白名单和动作策略。
 - `store`：飞书用户到 Codex thread 的映射。
 - `runtime`：任务状态机、超时和错误处理。
+- `logging`：JSONL 结构化日志输出。
 
 当前已落地：
 
@@ -23,6 +24,7 @@
 - `cli/check-config.js`：检查飞书凭据、白名单、默认工作目录和基础 runtime 配置。
 - `cli/smoke-codex-turn.js`：不依赖飞书的 Codex app-server smoke turn 入口。
 - `config/app-config.js`：从环境变量解析 fca 本地配置，不读取真实凭据文件。
+- `logging/json-logger.js`：按 `FCA_LOG_LEVEL` 输出 JSONL 结构化日志。
 - `feishu/event-handler.js`：处理飞书消息事件并调用 BridgeRuntime。
 - `feishu/event-handler.js` 已具备基础 OpenClaw 对齐护栏：app_id 校验、自回声过滤、message_id 去重、过期事件丢弃、按 chat 串行队列和取消快路径。
 - `feishu/message-client.js`：将 SDK 无关的飞书消息 action 转换为 transport 调用。
@@ -33,5 +35,5 @@
 - `feishu/task-card-controller.js`：根据 task 状态同步发送或更新飞书任务卡片。
 - `policy/access-policy.js`：飞书 `open_id` 和本地工作目录白名单校验。
 - `runtime/runtime-task.js`：Codex notification 到 fca task 状态的最小转换。
-- `runtime/bridge-runtime.js`：私聊文本消息到 policy、thread store、Codex session、streamed events 和任务卡片的最小编排，并对运行中卡片更新做节流，支持 active task 取消。
+- `runtime/bridge-runtime.js`：私聊文本消息到 policy、thread store、Codex session、streamed events 和任务卡片的最小编排，并对运行中卡片更新做节流，支持 active task 取消和结构化任务日志。
 - `store/thread-store.js`：飞书用户和工作目录到 Codex thread 的内存/JSON 文件映射。

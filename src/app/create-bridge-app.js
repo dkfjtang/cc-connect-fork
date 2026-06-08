@@ -12,6 +12,7 @@ export function createBridgeApp({
   botOpenId = null,
   codexAppServerFactory = (options) => new CodexAppServerProcess(options),
   feishuTransport,
+  logger = null,
   threadStoreFactory = (config) =>
     new FileThreadStore({ filePath: config.threadStorePath }),
 } = {}) {
@@ -48,6 +49,7 @@ export function createBridgeApp({
         threadStore,
         session,
         cardController,
+        logger,
         turnTimeoutMs: config.turnTimeoutSeconds * 1000,
       });
       eventHandler = new FeishuEventHandler({

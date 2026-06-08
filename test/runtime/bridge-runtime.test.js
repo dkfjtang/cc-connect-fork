@@ -392,12 +392,139 @@ test("handleTextMessage returns failed task when streamed turn fails", async () 
   assert.equal(task.snapshot().errorSummary, "denied");
 });
 
+test("handleTextMessage writes traceable structured task logs", async () => {
+  const logEntries = [];
+  const threadStore = new MemoryThreadStore({ now: () => "test-now" });
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore,
+    session: fakeSession(),
+    cardController: fakeCardController(),
+    logger: fakeLogger(logEntries),
+  });
+
+  await runtime.handleTextMessage({
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_123",
+    text: "hello",
+  });
+
+  assert.deepEqual(
+    logEntries.map((entry) => entry.event),
+    ["task.received", "task.thread_created", "task.turn_started", "task.completed"],
+  );
+  assert.deepEqual(logEntries.at(-1), {
+    level: "info",
+    event: "task.completed",
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_123",
+    cwd: "F:\\development\\f-codex",
+    threadId: "thr_new",
+    turnId: "turn_new",
+    status: "completed",
+    errorSummary: null,
+  });
+});
+
+test("handleTextMessage logs failed terminal state with error summary", async () => {
+  let emitEvent;
+  const logEntries = [];
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession({
+      onEvent: (handler) => {
+        emitEvent = handler;
+        return () => {};
+      },
+      startTurnHook: () => {
+        queueMicrotask(() => {
+          emitEvent({
+            method: "turn/completed",
+            params: { status: "failed", error: { message: "denied" } },
+          });
+        });
+      },
+    }),
+    cardController: fakeCardController(),
+    logger: fakeLogger(logEntries),
+  });
+
+  await runtime.handleTextMessage({
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_123",
+    text: "hello",
+  });
+
+  assert.deepEqual(logEntries.at(-1), {
+    level: "error",
+    event: "task.failed",
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_123",
+    cwd: "F:\\development\\f-codex",
+    threadId: "thr_new",
+    turnId: "turn_new",
+    status: "failed",
+    errorSummary: "denied",
+  });
+});
+
+test("handleTextMessage logs thrown turn errors with trace fields", async () => {
+  const logEntries = [];
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession({
+      startTurnHook: () => {
+        throw new Error("app-server unavailable");
+      },
+    }),
+    cardController: fakeCardController(),
+    logger: fakeLogger(logEntries),
+  });
+
+  await assert.rejects(
+    () =>
+      runtime.handleTextMessage({
+        messageId: "msg_123",
+        openId: "ou_allowed",
+        chatId: "oc_123",
+        text: "hello",
+      }),
+    /app-server unavailable/,
+  );
+
+  assert.deepEqual(logEntries.at(-1), {
+    level: "error",
+    event: "task.error",
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_123",
+    cwd: "F:\\development\\f-codex",
+    threadId: "thr_new",
+    turnId: null,
+    status: "queued",
+    errorSummary: "app-server unavailable",
+  });
+});
+
 function allowDefaultPolicy() {
   return new AccessPolicy({
     allowedOpenIds: ["ou_allowed"],
     allowedWorkdirs: ["F:\\development\\f-codex"],
     defaultWorkdir: "F:\\development\\f-codex",
   });
+}
+
+function fakeLogger(entries) {
+  return {
+    info: (event, fields) => entries.push({ level: "info", event, ...fields }),
+    error: (event, fields) => entries.push({ level: "error", event, ...fields }),
+  };
 }
 
 function fakeSession({ calls = [], onEvent, startTurnHook, interruptTurn } = {}) {

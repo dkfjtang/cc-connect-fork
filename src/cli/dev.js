@@ -1,6 +1,7 @@
 import { createBridgeApp } from "../app/create-bridge-app.js";
 import { checkConfig } from "./check-config.js";
 import { FeishuSdkTransport } from "../feishu/sdk-transport.js";
+import { createJsonLogger } from "../logging/json-logger.js";
 
 export async function runDev({
   env = process.env,
@@ -39,6 +40,10 @@ export async function runDev({
     env,
     feishuTransport,
     botOpenId: probe.botOpenId ?? null,
+    logger: createJsonLogger({
+      level: env.FCA_LOG_LEVEL?.trim() || "info",
+      output: errorOutput,
+    }),
   });
 
   output.write(`Starting fca for cwd ${app.config.defaultWorkdir}\n`);

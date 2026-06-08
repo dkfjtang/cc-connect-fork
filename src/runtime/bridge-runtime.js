@@ -9,6 +9,7 @@ export class BridgeRuntime {
   #setTimeout;
   #clearTimeout;
   #runningUpdateThrottleMs;
+  #logger;
   #activeTasks = new Map();
 
   constructor({
@@ -21,6 +22,7 @@ export class BridgeRuntime {
     now = () => Date.now(),
     setTimeoutFn = (callback, delay) => setTimeout(callback, delay),
     clearTimeoutFn = (timer) => clearTimeout(timer),
+    logger = null,
   }) {
     this.#policy = policy;
     this.#threadStore = threadStore;
@@ -31,6 +33,10 @@ export class BridgeRuntime {
     this.#now = now;
     this.#setTimeout = setTimeoutFn;
     this.#clearTimeout = clearTimeoutFn;
+    this.#logger = logger ?? {
+      info: () => {},
+      error: () => {},
+    };
   }
 
   async handleTextMessage({ messageId, openId, chatId, text }) {
@@ -58,6 +64,7 @@ export class BridgeRuntime {
       cancelled: false,
     };
     this.#activeTasks.set(activeKey, activeTask);
+    this.#logTask("info", "task.received", task);
 
     try {
       await this.#cardController.sync(task);
@@ -69,8 +76,10 @@ export class BridgeRuntime {
         const threadResult = await this.#session.startThread({});
         threadId = threadResult.thread.id;
         task.attachThread(threadId);
+        this.#logTask("info", "task.thread_created", task);
       } else {
         task.attachThread(threadId);
+        this.#logTask("info", "task.thread_reused", task);
       }
 
       const runningUpdates = this.#createRunningUpdateScheduler(task);
@@ -82,12 +91,19 @@ export class BridgeRuntime {
       if (activeTask.cancelled) {
         activeTask.resolveCancellation();
       } else {
-        const turnResult = await this.#session.startTurn({ threadId, text, cwd });
-        if (turnResult.turn?.id) {
-          task.handleCodexEvent({
-            method: "turn/started",
-            params: { turn: { id: turnResult.turn.id } },
-          });
+        try {
+          const turnResult = await this.#session.startTurn({ threadId, text, cwd });
+          if (turnResult.turn?.id) {
+            task.handleCodexEvent({
+              method: "turn/started",
+              params: { turn: { id: turnResult.turn.id } },
+            });
+            this.#logTask("info", "task.turn_started", task);
+          }
+        } catch (error) {
+          activeTask.resolveCancellation();
+          await turnCompleted.catch(() => {});
+          throw error;
         }
       }
 
@@ -104,8 +120,15 @@ export class BridgeRuntime {
         lastTurnId: task.snapshot().turnId,
       });
       await this.#cardController.sync(task);
+      const finalStatus = task.snapshot().status;
+      this.#logTask(finalStatus === "failed" ? "error" : "info", `task.${finalStatus}`, task);
 
       return task;
+    } catch (error) {
+      this.#logTask("error", "task.error", task, {
+        errorSummary: error.message,
+      });
+      throw error;
     } finally {
       if (this.#activeTasks.get(activeKey) === activeTask) {
         this.#activeTasks.delete(activeKey);
@@ -202,5 +225,23 @@ export class BridgeRuntime {
         }
       },
     };
+  }
+
+  #logTask(level, event, task, extraFields = {}) {
+    const snapshot = task.snapshot();
+    const fields = {
+      messageId: snapshot.feishuMessageId,
+      openId: snapshot.feishuOpenId,
+      chatId: snapshot.feishuChatId,
+      cwd: snapshot.cwd,
+      threadId: snapshot.threadId,
+      turnId: snapshot.turnId,
+      status: snapshot.status,
+      errorSummary: snapshot.errorSummary,
+      ...extraFields,
+    };
+
+    const write = this.#logger[level] ?? this.#logger.info ?? (() => {});
+    write(event, fields);
   }
 }

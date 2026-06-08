@@ -20,7 +20,7 @@
 | `FCA_CODEX_BIN` | Codex CLI 命令路径，默认可为 `codex`。 |
 | `FCA_CODEX_LISTEN` | app-server 监听方式，MVP 固定使用 `stdio://`。 |
 | `FCA_CODEX_MODEL` | 可选 Codex 模型覆盖。 |
-| `FCA_LOG_LEVEL` | 日志级别。 |
+| `FCA_LOG_LEVEL` | JSONL 结构化日志级别，可选 `debug` / `info` / `warn` / `error`，默认 `info`。 |
 | `FCA_TURN_TIMEOUT_SECONDS` | 单个 turn 超时时间。 |
 | `FCA_THREAD_STORE_PATH` | 本地 thread 映射 JSON 文件路径。 |
 
@@ -43,3 +43,7 @@ npm run check-config
 - `FCA_ALLOWED_WORKDIRS` 是否至少包含一个本地目录。
 - `FCA_DEFAULT_WORKDIR` 是否存在且位于工作目录白名单内。
 - turn 超时、thread store 路径和 Codex 命令等基础 runtime 配置。
+
+## 日志输出
+
+`npm run dev` 会将结构化任务日志写入 stderr，便于本机终端、容器或进程管理器采集。任务日志包含 `messageId`、`openId`、`chatId`、`threadId`、`turnId`、`status` 和 `errorSummary`，不包含 App Secret、Codex 凭据或完整环境变量。
