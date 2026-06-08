@@ -44,6 +44,14 @@
 
 `codex exec --json` 仅保留为诊断和降级路径，不作为主架构。实验性 WebSocket 传输后续再评估，MVP 不开放非本机监听。
 
+## 本地验证
+
+```powershell
+npm test
+```
+
+当前测试覆盖 Codex JSON-RPC client 和 streamed delta 输出聚合。
+
 ## 文档索引
 
 - [项目章程](docs/project-charter.md)
