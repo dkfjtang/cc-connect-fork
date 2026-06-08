@@ -84,11 +84,14 @@ test("handleTextMessage creates and stores a thread when mapping is missing", as
   assert.equal(task.snapshot().appVersion, "0.2.0-test");
   assert.deepEqual(
     await threadStore.getThread({
-      openId: "ou_allowed",
+      conversationId: "oc_123",
       cwd: "F:\\development\\f-codex",
     }),
     {
       openId: "ou_allowed",
+      chatId: "oc_123",
+      chatType: "group",
+      conversationId: "oc_123",
       cwd: "F:\\development\\f-codex",
       threadId: "thr_new",
       lastTurnId: "turn_new",
@@ -104,6 +107,43 @@ test("handleTextMessage creates and stores a thread when mapping is missing", as
       cwd: "F:\\development\\f-codex",
     },
   ]);
+});
+
+test("handleTextMessage reuses group thread mapping by chat id across senders", async () => {
+  const threadStore = new MemoryThreadStore({ now: () => "test-now" });
+  await threadStore.saveThread({
+    openId: "ou_first",
+    chatId: "oc_group",
+    chatType: "group",
+    conversationId: "oc_group",
+    cwd: "F:\\development\\f-codex",
+    threadId: "thr_group",
+  });
+  const sessionCalls = [];
+  const runtime = new BridgeRuntime({
+    policy: new AccessPolicy({
+      allowedOpenIds: ["ou_allowed"],
+      allowedWorkdirs: ["F:\\development\\f-codex"],
+      defaultWorkdir: "F:\\development\\f-codex",
+    }),
+    threadStore,
+    session: fakeSession({ calls: sessionCalls }),
+    cardController: fakeCardController(),
+  });
+
+  const task = await runtime.handleTextMessage({
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_group",
+    chatType: "group",
+    text: "hello",
+  });
+
+  assert.equal(task.snapshot().threadId, "thr_group");
+  assert.deepEqual(
+    sessionCalls.map((call) => call.method),
+    ["startTurn"],
+  );
 });
 
 test("handleTextMessage syncs task card before and after turn", async () => {

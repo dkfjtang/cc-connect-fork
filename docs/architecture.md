@@ -39,7 +39,7 @@ fca 是飞书到本地 Codex 的桥接服务。它不替代 Codex，也不把本
 
 ### Thread Store
 
-- 维护飞书用户和 Codex thread 的映射。
+- 维护飞书私聊用户、群聊会话和 Codex thread 的映射。
 - 第一阶段可使用本地 JSON 或 SQLite。
 - 长期建议 SQLite，便于状态查询、恢复和迁移。
 
@@ -60,10 +60,10 @@ fca 是飞书到本地 Codex 的桥接服务。它不替代 Codex，也不把本
 
 ## 数据流
 
-1. 用户在飞书私聊 Bot 发送文本。
+1. 用户在飞书私聊 Bot 发送文本，或在群聊中明确 @ Bot。
 2. Feishu Adapter 收到事件并提取消息上下文。
 3. Policy Guard 校验用户和工作目录。
-4. Thread Store 查找或创建 Codex thread 映射。
+4. Thread Store 查找或创建 Codex thread 映射：私聊按 `open_id + cwd`，群聊按 `chat_id + cwd`。
 5. Codex AppServer Client 向 app-server 发起 turn。
 6. Bridge 聚合 Codex 事件。
 7. Message Renderer 将最终结果发回飞书。

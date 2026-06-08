@@ -78,7 +78,8 @@ export class BridgeRuntime {
     try {
       await this.#cardController.sync(task);
 
-      const mapping = await this.#threadStore.getThread({ openId, cwd });
+      const threadMapping = threadMappingFields({ openId, chatId, chatType, cwd });
+      const mapping = await this.#threadStore.getThread(threadMapping);
       let threadId = mapping?.threadId;
 
       if (!threadId) {
@@ -125,7 +126,10 @@ export class BridgeRuntime {
       }
 
       await this.#threadStore.saveThread({
+        ...threadMapping,
         openId,
+        chatId,
+        chatType,
         cwd,
         threadId,
         lastTurnId: task.snapshot().turnId,
@@ -258,6 +262,20 @@ export class BridgeRuntime {
     const write = this.#logger[level] ?? this.#logger.info ?? (() => {});
     write(event, fields);
   }
+}
+
+function threadMappingFields({ openId, chatId, chatType, cwd }) {
+  if (chatType === "group") {
+    return {
+      conversationId: chatId,
+      cwd,
+    };
+  }
+
+  return {
+    openId,
+    cwd,
+  };
 }
 
 function errorLogFields(error) {

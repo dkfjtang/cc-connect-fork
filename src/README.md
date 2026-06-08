@@ -7,7 +7,7 @@
 - `feishu`：飞书长连接、事件解析和消息发送。
 - `codex`：`codex app-server` 子进程和 JSON-RPC client。
 - `policy`：用户白名单、工作目录白名单和动作策略。
-- `store`：飞书用户到 Codex thread 的映射，以及飞书消息去重记录。
+- `store`：飞书私聊用户/群聊会话到 Codex thread 的映射，以及飞书消息去重记录。
 - `runtime`：任务状态机、超时和错误处理。
 - `logging`：JSONL 结构化日志输出。
 
@@ -37,4 +37,4 @@
 - `runtime/runtime-task.js`：Codex notification 到 fca task 状态的最小转换。
 - `runtime/bridge-runtime.js`：飞书文本消息到 policy、thread store、Codex session、streamed events 和任务卡片的最小编排，并对运行中卡片更新做节流，支持 active task 取消和结构化任务日志。
 - `store/message-dedup-store.js`：飞书消息 id 的内存/JSON 文件去重窗口，防止重连或进程重启回放重复执行。
-- `store/thread-store.js`：飞书用户和工作目录到 Codex thread 的内存/JSON 文件映射。
+- `store/thread-store.js`：飞书私聊用户或群聊会话和工作目录到 Codex thread 的内存/JSON 文件映射。

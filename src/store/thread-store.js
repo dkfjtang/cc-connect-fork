@@ -14,13 +14,24 @@ export class MemoryThreadStore {
     }
   }
 
-  async getThread({ openId, cwd }) {
-    return this.#records.get(mappingKey({ openId, cwd })) ?? null;
+  async getThread(query) {
+    return this.#records.get(mappingKey(query)) ?? null;
   }
 
-  async saveThread({ openId, cwd, threadId, lastTurnId = null }) {
+  async saveThread({
+    openId,
+    chatId = null,
+    chatType = null,
+    conversationId = null,
+    cwd,
+    threadId,
+    lastTurnId = null,
+  }) {
     const record = {
       openId,
+      ...(chatId ? { chatId } : {}),
+      ...(chatType ? { chatType } : {}),
+      ...(conversationId ? { conversationId } : {}),
       cwd,
       threadId,
       lastTurnId,
@@ -89,6 +100,6 @@ async function readStoreFile(filePath) {
   }
 }
 
-function mappingKey({ openId, cwd }) {
-  return `${openId}\u0000${cwd}`;
+function mappingKey({ conversationId = null, openId, cwd }) {
+  return `${conversationId ?? openId}\u0000${cwd}`;
 }

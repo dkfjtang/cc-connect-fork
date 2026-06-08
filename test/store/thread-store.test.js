@@ -49,6 +49,88 @@ test("MemoryThreadStore isolates mappings by cwd", async () => {
   assert.equal(await store.getThread({ openId: "ou_1", cwd: "F:\\development\\IDSS" }), null);
 });
 
+test("MemoryThreadStore can scope mappings by group chat id", async () => {
+  const store = new MemoryThreadStore({ now: () => "test-now" });
+
+  await store.saveThread({
+    openId: "ou_1",
+    chatId: "oc_group",
+    chatType: "group",
+    conversationId: "oc_group",
+    cwd: "F:\\development\\f-codex",
+    threadId: "thr_group",
+  });
+
+  assert.deepEqual(
+    await store.getThread({
+      conversationId: "oc_group",
+      cwd: "F:\\development\\f-codex",
+    }),
+    {
+      openId: "ou_1",
+      chatId: "oc_group",
+      chatType: "group",
+      conversationId: "oc_group",
+      cwd: "F:\\development\\f-codex",
+      threadId: "thr_group",
+      lastTurnId: null,
+      lastSeenAt: "test-now",
+    },
+  );
+  assert.equal(
+    await store.getThread({
+      openId: "ou_1",
+      cwd: "F:\\development\\f-codex",
+    }),
+    null,
+  );
+});
+
+test("MemoryThreadStore reuses legacy user scoped records without conversation id", async () => {
+  const store = new MemoryThreadStore({
+    records: [
+      {
+        openId: "ou_1",
+        cwd: "F:\\development\\f-codex",
+        threadId: "thr_legacy",
+      },
+    ],
+  });
+
+  assert.deepEqual(
+    await store.getThread({
+      openId: "ou_1",
+      cwd: "F:\\development\\f-codex",
+    }),
+    {
+      openId: "ou_1",
+      cwd: "F:\\development\\f-codex",
+      threadId: "thr_legacy",
+    },
+  );
+});
+
+test("MemoryThreadStore isolates group mappings from different group chats", async () => {
+  const store = new MemoryThreadStore({ now: () => "test-now" });
+
+  await store.saveThread({
+    openId: "ou_1",
+    chatId: "oc_a",
+    chatType: "group",
+    conversationId: "oc_a",
+    cwd: "F:\\development\\f-codex",
+    threadId: "thr_a",
+  });
+
+  assert.equal(
+    await store.getThread({
+      conversationId: "oc_b",
+      cwd: "F:\\development\\f-codex",
+    }),
+    null,
+  );
+});
+
 test("FileThreadStore persists mappings to JSON file", async () => {
   const dir = await mkdtemp(join(tmpdir(), "fca-thread-store-"));
   const filePath = join(dir, "threads.json");

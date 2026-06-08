@@ -94,6 +94,7 @@ Done 标准：
 - 非文本消息收到暂不支持提示。
 - 同一任务优先更新同一张飞书卡片，而不是刷屏式发送多条消息。
 - 同一 `chat_id` 的消息串行进入 Codex turn。
+- Thread 映射按会话维度隔离：私聊使用 `open_id + cwd`，群聊使用 `chat_id + cwd`。
 - Codex delta 运行中更新经过节流，不逐 token patch 飞书卡片。
 
 ## M4 稳定性和可观测性

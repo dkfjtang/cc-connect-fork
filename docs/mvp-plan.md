@@ -30,7 +30,7 @@
 - 可选配置允许触发的群聊 `chat_id`。
 - 本地启动并管理一个 `codex app-server` 子进程。
 - 第一阶段使用 `stdio://` 传输，不开放远程 WebSocket 监听。
-- 为每个飞书用户维护基础 thread 映射。
+- 为每个飞书私聊用户和群聊会话维护基础 thread 映射。
 - 将用户消息转成 `turn/start` 输入。
 - 读取 app-server 事件流，聚合运行状态和最终回答，并更新飞书任务卡片。
 - 记录基础任务日志：飞书 `message_id`、`open_id`、Codex `thread_id`、`turn_id`、工作目录、状态和错误摘要。
@@ -71,7 +71,7 @@ Bridge 侧需要封装一个 Codex client，负责：
 
 - 本地能启动 fca Bridge 并拉起 `codex app-server`。
 - 白名单用户在飞书私聊发送文本后，能收到 Codex 最终文本回复。
-- 同一飞书用户的连续消息能复用同一个 Codex thread。
+- 同一飞书私聊用户的连续消息能复用同一个 Codex thread；同一群聊会话的连续 @ 消息能复用该群的 Codex thread。
 - app-server 断开、Codex 执行失败或超时时，飞书能收到明确错误提示。
 - 本地日志能定位一次请求的飞书消息、Codex thread、Codex turn 和最终状态。
 - 仓库包含 `.env.example`，不包含真实凭据。

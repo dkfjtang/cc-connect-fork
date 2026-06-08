@@ -89,12 +89,13 @@ fca 内部任务对象。
 
 ### Thread Mapping
 
-飞书用户到 Codex thread 的映射。
+飞书会话到 Codex thread 的映射。
 
 第一阶段建议 key：
 
 ```text
-open_id + default_workdir
+私聊：open_id + default_workdir
+群聊：chat_id + default_workdir
 ```
 
 value：
@@ -105,7 +106,7 @@ last_turn_id
 last_seen_at
 ```
 
-这样同一用户在同一工作目录下默认复用 thread。后续 `/cwd` 或多项目能力再扩展 key。
+这样同一用户在同一工作目录下的私聊默认复用 thread，同一群在同一工作目录下默认复用另一个 thread。群聊记录保留触发用户 `open_id` 作为审计字段，但不把发送者作为群 thread key，避免同一群被不同成员拆成多个 Codex thread。后续 `/cwd` 或多项目能力再扩展 key。
 
 ### Turn Request
 
@@ -271,7 +272,7 @@ Codex approval event
 
 ## 开放问题
 
-- thread mapping 第一阶段使用 JSON 文件还是 SQLite。
+- thread mapping 长期是否迁移到 SQLite。
 - 是否每个用户共享一个 app-server 连接，还是每个任务独立连接。
 - approval event 的确切方法名需要以后续 schema 生成为准。
 - 是否需要在 turn 参数里显式传入 sandbox 和 approval policy。
