@@ -49,6 +49,7 @@ export function checkConfig(env = process.env) {
       threadStorePath: config.threadStorePath,
       turnTimeoutSeconds: config.turnTimeoutSeconds,
       approvalTimeoutSeconds: config.approvalTimeoutSeconds,
+      cardChannel: config.cardChannel,
       cardFooterFields: config.cardFooterFields,
     },
   };
@@ -93,6 +94,7 @@ export async function runCheckConfig({
   output.write(`messageDedupTtlSeconds: ${result.summary.messageDedupTtlSeconds}\n`);
   output.write(`turnTimeoutSeconds: ${result.summary.turnTimeoutSeconds}\n`);
   output.write(`approvalTimeoutSeconds: ${result.summary.approvalTimeoutSeconds}\n`);
+  output.write(`cardChannel: ${result.summary.cardChannel}\n`);
   output.write(`cardFooterFields: ${result.summary.cardFooterFields.join(",")}\n`);
   if (result.warnings.length > 0) {
     output.write(`${result.warnings.map((warning) => `! ${warning}`).join("\n")}\n`);

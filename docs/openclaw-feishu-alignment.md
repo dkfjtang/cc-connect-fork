@@ -71,7 +71,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | P0 | bot open_id 探测 | 已在 dev 启动时查询 bot 身份，并注入 `FeishuEventHandler` |
 | P0 | 按 chat / thread 串行队列 | 已增加 per-chat queue，避免同一会话并发 turn 打乱卡片 |
 | P0 | 卡片更新节流 | 已增加 delta 聚合低频 patch 和同一卡片更新队列 |
-| P1 | CardKit 优先、IM patch fallback | MVP 先用 IM card patch，后续增加 CardKit 2.0 |
+| P1 | CardKit 优先、IM patch fallback | 已支持 `FCA_CARD_CHANNEL=cardkit` 的 CardKit 优先抽象和 IM fallback；真实 CardKit transport 方法待接入 |
 | P1 | 群聊策略 | 已完成群聊 @ 最小入口、可选群 `chat_id` allowlist、群内 sender 收紧策略和群级 developer instructions |
 | P1 | 卡片交互审批 | 已完成 Codex approval server request 识别、等待审批卡片、详情展开、飞书按钮回调和超时默认安全拒绝 |
 | P2 | 文件/图片资源 | 私聊非文本消息已返回固定暂不支持提示且不下载附件；后续作为 Codex 输入附件和输出附件能力规划 |
@@ -87,7 +87,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | P0 | 卡片 footer 的状态、会话和排障字段 | 已展示 status / thread / turn / elapsed / token / cache / context / model / fca version / error type / cwd，并支持字段可配置 |
 | P1 | 群聊 @、群配置和发送者策略 | 已实现 @ 触发、可选群 `chat_id` allowlist、群级 JSON 配置文件、全局发送者 `open_id` 白名单、群内 sender 收紧策略和群级 developer instructions |
 | P1 | 敏感操作确认卡片 | 已映射到 Codex approval server request，展示风险等级、固定枚举风险因素和脱敏范围摘要，并支持同一卡片展开详情；不复用 OpenClaw tool approval 内核 |
-| P1 | CardKit 2.0 与普通卡片降级 | 先保留 IM patch；后续实现 CardKit 优先、IM patch fallback |
+| P1 | CardKit 2.0 与普通卡片降级 | 已补 CardKit 优先、IM fallback 的配置开关、卡片身份元数据和 message client 降级链路；后续接入真实 CardKit transport |
 
 ## 事件入口对齐
 
@@ -152,9 +152,10 @@ OpenClaw 的卡片链路包含：
 
 fca 的目标：
 
-- MVP：普通 IM 卡片 send + patch，running / completed / failed 三态稳定。
+- 默认：普通 IM 卡片 send + patch，running / completed / failed 三态稳定。
 - 已增加运行中更新节流、同一卡片互斥 flush、发送/更新错误分类退避、卡片 payload 尺寸保护、per-chat queue 和飞书 API 错误归一化。
-- 后续：再评估 CardKit 2.0；footer 字段可配置化已由 `FCA_CARD_FOOTER_FIELDS` 支持。
+- 已增加 `FCA_CARD_CHANNEL=cardkit` 配置、卡片 channel / card id / sequence 元数据流转、CardKit send/update 优先调用和 IM fallback；当前 SDK transport 尚未实现真实 CardKit API 方法，因此默认仍保持 IM。
+- footer 字段可配置化已由 `FCA_CARD_FOOTER_FIELDS` 支持。
 
 ## 不对齐项
 

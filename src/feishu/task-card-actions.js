@@ -7,6 +7,9 @@ export function buildTaskCardAction(snapshot, options = {}) {
     return {
       type: "update",
       messageId: snapshot.cardMessageId,
+      cardChannel: snapshot.cardChannel,
+      cardId: snapshot.cardId,
+      cardSequence: snapshot.cardSequence,
       card,
     };
   }

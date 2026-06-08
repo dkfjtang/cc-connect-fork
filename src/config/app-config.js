@@ -11,6 +11,7 @@ const DEFAULT_SQLITE_THREAD_STORE_PATH = "data/threads.sqlite";
 const DEFAULT_THREAD_STORE_DRIVER = "json";
 const DEFAULT_MESSAGE_DEDUP_STORE_PATH = "data/message-dedup.json";
 const DEFAULT_APP_VERSION = "0.1.0";
+const DEFAULT_CARD_CHANNEL = "im";
 const DEFAULT_CARD_FOOTER_FIELDS = [
   "status",
   "thread",
@@ -79,6 +80,7 @@ export function loadConfig(env = process.env) {
     messageDedupTtlSeconds,
     turnTimeoutSeconds,
     approvalTimeoutSeconds,
+    cardChannel: parseCardChannel(env.FCA_CARD_CHANNEL),
     cardFooterFields: parseCardFooterFields(env.FCA_CARD_FOOTER_FIELDS),
   };
 }
@@ -176,6 +178,15 @@ function parseThreadStoreDriver(value) {
   }
 
   return driver;
+}
+
+function parseCardChannel(value) {
+  const channel = value?.trim() || DEFAULT_CARD_CHANNEL;
+  if (!["im", "cardkit"].includes(channel)) {
+    throw new Error("FCA_CARD_CHANNEL must be im or cardkit");
+  }
+
+  return channel;
 }
 
 function splitList(value, separator) {

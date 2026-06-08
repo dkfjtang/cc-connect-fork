@@ -24,6 +24,7 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
     FCA_MESSAGE_DEDUP_TTL_SECONDS: "3600",
     FCA_TURN_TIMEOUT_SECONDS: "120",
     FCA_APPROVAL_TIMEOUT_SECONDS: "30",
+    FCA_CARD_CHANNEL: "cardkit",
     FCA_CARD_FOOTER_FIELDS: "status,elapsed,tokens,model",
   });
 
@@ -52,6 +53,7 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
   assert.equal(config.messageDedupTtlSeconds, 3600);
   assert.equal(config.turnTimeoutSeconds, 120);
   assert.equal(config.approvalTimeoutSeconds, 30);
+  assert.equal(config.cardChannel, "cardkit");
   assert.deepEqual(config.cardFooterFields, ["status", "elapsed", "tokens", "model"]);
 });
 
@@ -115,6 +117,7 @@ test("loadConfig uses safe local defaults when optional values are missing", () 
   assert.equal(config.messageDedupTtlSeconds, 86400);
   assert.equal(config.turnTimeoutSeconds, 900);
   assert.equal(config.approvalTimeoutSeconds, 300);
+  assert.equal(config.cardChannel, "im");
   assert.deepEqual(config.cardFooterFields, [
     "status",
     "thread",
@@ -192,5 +195,12 @@ test("loadConfig rejects unsupported card footer fields", () => {
   assert.throws(
     () => loadConfig({ FCA_CARD_FOOTER_FIELDS: "status,secret" }),
     /FCA_CARD_FOOTER_FIELDS contains unsupported field: secret/,
+  );
+});
+
+test("loadConfig rejects unsupported card channel", () => {
+  assert.throws(
+    () => loadConfig({ FCA_CARD_CHANNEL: "legacy" }),
+    /FCA_CARD_CHANNEL must be im or cardkit/,
   );
 });

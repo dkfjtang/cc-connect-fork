@@ -19,6 +19,7 @@ TaskCardController
 - `send` action 转换为发送 interactive 消息。
 - `update` action 转换为更新已发送消息卡片。
 - transport 通过依赖注入提供，便于测试和后续替换 SDK。
+- `FCA_CARD_CHANNEL=cardkit` 时，`FeishuMessageClient` 会优先调用可选 CardKit transport 方法；方法缺失或调用失败会回退普通 IM 卡片。
 - `FeishuSdkTransport` 使用 `@larksuiteoapi/node-sdk` 调用飞书消息 API。
 - `FeishuSdkTransport.probeBot()` 通过 bot ping API 探测 bot open_id，用于自回声过滤。
 - `FeishuSdkTransport.startMessageListener()` 使用飞书 SDK `EventDispatcher` 和 `WSClient` 监听 `im.message.receive_v1`。
@@ -39,6 +40,20 @@ TaskCardController
     messageId,
     card,
   }) => ({ data: {} }),
+
+  // Optional. Used only when FCA_CARD_CHANNEL=cardkit.
+  sendCardKitMessage: async ({
+    receiveIdType,
+    receiveId,
+    card,
+  }) => ({ data: { message_id: "om_xxx", card_id: "card_xxx", sequence: 1 } }),
+
+  // Optional. Used only for cards previously sent through CardKit.
+  updateCardKitCard: async ({
+    cardId,
+    sequence,
+    card,
+  }) => ({ data: { sequence } }),
 
   startMessageListener: async ({
     onMessageReceive,
@@ -122,7 +137,28 @@ transport payload：
 返回值：
 
 ```js
-{ messageId: "om_xxx" }
+{ messageId: "om_xxx", cardChannel: "im" }
+```
+
+当 `FCA_CARD_CHANNEL=cardkit` 且 transport 提供 `sendCardKitMessage` 时，会先尝试 CardKit：
+
+```js
+{
+  receiveIdType: "chat_id",
+  receiveId: "oc_xxx",
+  card
+}
+```
+
+成功返回：
+
+```js
+{
+  messageId: "om_xxx",
+  cardChannel: "cardkit",
+  cardId: "card_xxx",
+  cardSequence: 1
+}
 ```
 
 ## 更新卡片
@@ -133,6 +169,9 @@ transport payload：
 {
   type: "update",
   messageId: "om_xxx",
+  cardChannel: "cardkit",
+  cardId: "card_xxx",
+  cardSequence: 1,
   card: {}
 }
 ```
@@ -149,9 +188,12 @@ transport payload：
 返回值：
 
 ```js
-{}
+{ cardChannel: "im" }
 ```
+
+如果 action 带有 `cardChannel=cardkit`、`cardId`，且 transport 提供 `updateCardKitCard`，会先尝试 CardKit update，并用 `cardSequence + 1` 作为下一次更新序号。CardKit update 失败时，会回退到 `patchMessageCard`，并把 task 中保存的 `cardChannel` 降级为 `im`，避免后续继续依赖不可用的 CardKit 通道。
 
 ## 后续接入点
 
-- 增加长连接断线、重连和退出信号治理。
+- 在 `FeishuSdkTransport` 中接入真实 CardKit 2.0 API 方法。
+- 增加长连接断线和重连策略评估。

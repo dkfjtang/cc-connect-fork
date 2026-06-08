@@ -7,6 +7,9 @@ export class RuntimeTask {
   #feishuChatId;
   #feishuChatType;
   #cardMessageId = null;
+  #cardChannel = null;
+  #cardId = null;
+  #cardSequence = null;
   #threadId = null;
   #turnId = null;
   #cwd;
@@ -53,8 +56,15 @@ export class RuntimeTask {
     this.#threadId = threadId;
   }
 
-  attachCard(cardMessageId) {
-    this.#cardMessageId = cardMessageId;
+  attachCard(cardMessageId, metadata = {}) {
+    this.#cardMessageId = cardMessageId ?? this.#cardMessageId;
+    this.#cardChannel = hasOwn(metadata, "cardChannel")
+      ? metadata.cardChannel
+      : this.#cardChannel ?? "im";
+    this.#cardId = hasOwn(metadata, "cardId") ? metadata.cardId : this.#cardId;
+    this.#cardSequence = hasOwn(metadata, "cardSequence")
+      ? metadata.cardSequence
+      : this.#cardSequence;
   }
 
   cancel(reason = "任务已取消") {
@@ -150,6 +160,9 @@ export class RuntimeTask {
       feishuChatId: this.#feishuChatId,
       feishuChatType: this.#feishuChatType,
       cardMessageId: this.#cardMessageId,
+      cardChannel: this.#cardChannel,
+      cardId: this.#cardId,
+      cardSequence: this.#cardSequence,
       threadId: this.#threadId,
       turnId: this.#turnId,
       cwd: this.#cwd,
@@ -538,6 +551,10 @@ function countBy(values) {
 
 function unique(values) {
   return [...new Set(values)];
+}
+
+function hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key);
 }
 
 function approvalDecisionStatus(decision) {

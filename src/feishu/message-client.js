@@ -1,8 +1,13 @@
 export class FeishuMessageClient {
   #transport;
+  #cardChannel;
 
-  constructor({ transport }) {
+  constructor({ transport, cardChannel = "im" }) {
     this.#transport = transport;
+    if (!["im", "cardkit"].includes(cardChannel)) {
+      throw new Error("FeishuMessageClient cardChannel must be im or cardkit");
+    }
+    this.#cardChannel = cardChannel;
   }
 
   async sendAction(action) {
@@ -37,6 +42,39 @@ export class FeishuMessageClient {
   }
 
   async #sendCard(action) {
+    if (this.#cardChannel === "cardkit") {
+      return this.#sendCardKitCardWithFallback(action);
+    }
+
+    return this.#sendImCard(action);
+  }
+
+  async #sendCardKitCardWithFallback(action) {
+    if (typeof this.#transport.sendCardKitMessage === "function") {
+      try {
+        const response = await callFeishuAction("send", () =>
+          this.#transport.sendCardKitMessage({
+            receiveIdType: action.receiveIdType,
+            receiveId: action.receiveId,
+            card: action.card,
+          }),
+        );
+
+        return {
+          messageId: response?.data?.message_id ?? response?.data?.messageId ?? null,
+          cardChannel: "cardkit",
+          cardId: response?.data?.card_id ?? response?.data?.cardId ?? null,
+          cardSequence: normalizeSequence(response?.data?.sequence),
+        };
+      } catch {
+        // Fall back to the stable IM card path when CardKit is unavailable or rejected.
+      }
+    }
+
+    return this.#sendImCard(action);
+  }
+
+  async #sendImCard(action) {
     const response = await callFeishuAction("send", () =>
       this.#transport.sendMessage({
         receiveIdType: action.receiveIdType,
@@ -48,10 +86,40 @@ export class FeishuMessageClient {
 
     return {
       messageId: response?.data?.message_id ?? null,
+      cardChannel: "im",
+      cardId: null,
+      cardSequence: null,
     };
   }
 
   async #updateCard(action) {
+    if (
+      action.cardChannel === "cardkit" &&
+      action.cardId &&
+      typeof this.#transport.updateCardKitCard === "function"
+    ) {
+      try {
+        const response = await callFeishuAction("update", () =>
+          this.#transport.updateCardKitCard({
+            cardId: action.cardId,
+            sequence: nextSequence(action.cardSequence),
+            card: action.card,
+          }),
+        );
+
+        return {
+          cardChannel: "cardkit",
+          cardId: action.cardId,
+          cardSequence: normalizeSequence(
+            response?.data?.sequence,
+            nextSequence(action.cardSequence),
+          ),
+        };
+      } catch {
+        // Keep the already-sent message usable by patching it through the IM fallback.
+      }
+    }
+
     await callFeishuAction("update", () =>
       this.#transport.patchMessageCard({
         messageId: action.messageId,
@@ -59,7 +127,11 @@ export class FeishuMessageClient {
       }),
     );
 
-    return {};
+    return {
+      cardChannel: "im",
+      cardId: null,
+      cardSequence: null,
+    };
   }
 }
 
@@ -95,4 +167,13 @@ async function callFeishuAction(actionType, action) {
       cause: error,
     });
   }
+}
+
+function nextSequence(value) {
+  return normalizeSequence(value) + 1;
+}
+
+function normalizeSequence(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }

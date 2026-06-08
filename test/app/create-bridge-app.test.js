@@ -79,6 +79,71 @@ test("createBridgeApp wires config, policy, store, runtime, and handler", async 
   assert.equal(app.config.approvalTimeoutSeconds, 42);
 });
 
+test("createBridgeApp passes configured card channel to Feishu message client", async () => {
+  const cardActions = [];
+  let emitted;
+  const app = createBridgeApp({
+    env: {
+      FCA_ALLOWED_OPEN_IDS: "ou_123",
+      FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex",
+      FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
+      FCA_CARD_CHANNEL: "cardkit",
+    },
+    codexAppServerFactory: () => ({
+      start: async () => ({
+        onEvent: (handler) => {
+          emitted = handler;
+          return () => {};
+        },
+        startThread: async () => ({ thread: { id: "thr_123" } }),
+        startTurn: async () => {
+          queueMicrotask(() => {
+            emitted({
+              method: "turn/completed",
+              params: { status: "success" },
+            });
+          });
+          return { turn: { id: "turn_123" } };
+        },
+      }),
+    }),
+    feishuTransport: {
+      sendCardKitMessage: async (payload) => {
+        cardActions.push({ type: "sendCardKitMessage", payload });
+        return { data: { message_id: "om_123", card_id: "card_123", sequence: 1 } };
+      },
+      patchMessageCard: async (payload) => {
+        cardActions.push({ type: "patchMessageCard", payload });
+        return { data: {} };
+      },
+    },
+    threadStoreFactory: () => ({
+      getThread: async () => null,
+      saveThread: async () => {},
+    }),
+    messageDedupStoreFactory: emptyMessageDedupStore,
+  });
+
+  await app.start();
+  const result = await app.eventHandler.handleMessageReceive({
+    event: {
+      sender: { sender_id: { open_id: "ou_123" } },
+      message: {
+        message_id: "om_123",
+        chat_id: "oc_123",
+        chat_type: "p2p",
+        message_type: "text",
+        content: JSON.stringify({ text: "hello" }),
+      },
+    },
+  });
+
+  assert.equal(result.status, "handled");
+  assert.equal(cardActions[0].type, "sendCardKitMessage");
+  assert.equal(cardActions[0].payload.receiveId, "oc_123");
+  assert.equal(app.config.cardChannel, "cardkit");
+});
+
 test("createBridgeApp exposes config for diagnostics", () => {
   const app = createBridgeApp({
     env: {

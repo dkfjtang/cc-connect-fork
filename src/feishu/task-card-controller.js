@@ -45,7 +45,10 @@ export class TaskCardController {
     const result = await this.#sendWithRetry(action);
 
     if (action.type === "send" && result?.messageId) {
-      task.attachCard(result.messageId);
+      task.attachCard(result.messageId, result);
+    }
+    if (action.type === "update" && result?.cardChannel) {
+      task.attachCard(action.messageId, result);
     }
 
     return result;

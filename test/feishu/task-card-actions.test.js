@@ -24,6 +24,9 @@ test("buildTaskCardAction builds update action when card message exists", () => 
   const action = buildTaskCardAction({
     feishuChatId: "oc_123",
     cardMessageId: "om_123",
+    cardChannel: "cardkit",
+    cardId: "card_123",
+    cardSequence: 3,
     status: "running",
     summaryText: "working",
     finalText: "",
@@ -32,6 +35,9 @@ test("buildTaskCardAction builds update action when card message exists", () => 
 
   assert.equal(action.type, "update");
   assert.equal(action.messageId, "om_123");
+  assert.equal(action.cardChannel, "cardkit");
+  assert.equal(action.cardId, "card_123");
+  assert.equal(action.cardSequence, 3);
   assert.equal(action.card.header.title.content, "Codex 执行中");
 });
 

@@ -26,6 +26,29 @@ test("sync sends a new card and attaches returned card message id", async () => 
   assert.equal(task.snapshot().cardMessageId, "om_123");
 });
 
+test("sync stores card channel metadata returned by sender", async () => {
+  const task = new RuntimeTask({
+    taskId: "task_123",
+    feishuChatId: "oc_123",
+    cwd: "F:\\development\\f-codex",
+  });
+  const controller = new TaskCardController({
+    sendAction: async () => ({
+      messageId: "om_123",
+      cardChannel: "cardkit",
+      cardId: "card_123",
+      cardSequence: 1,
+    }),
+  });
+
+  await controller.sync(task);
+
+  assert.equal(task.snapshot().cardMessageId, "om_123");
+  assert.equal(task.snapshot().cardChannel, "cardkit");
+  assert.equal(task.snapshot().cardId, "card_123");
+  assert.equal(task.snapshot().cardSequence, 1);
+});
+
 test("sync updates existing card without replacing card message id", async () => {
   const task = new RuntimeTask({
     taskId: "task_123",
@@ -51,6 +74,37 @@ test("sync updates existing card without replacing card message id", async () =>
   assert.equal(actions[0].type, "update");
   assert.equal(actions[0].messageId, "om_123");
   assert.equal(task.snapshot().cardMessageId, "om_123");
+});
+
+test("sync downgrades stored card channel when update falls back to IM", async () => {
+  const task = new RuntimeTask({
+    taskId: "task_123",
+    feishuChatId: "oc_123",
+    cwd: "F:\\development\\f-codex",
+  });
+  task.attachCard("om_123", {
+    cardChannel: "cardkit",
+    cardId: "card_123",
+    cardSequence: 1,
+  });
+  const actions = [];
+  const controller = new TaskCardController({
+    sendAction: async (action) => {
+      actions.push(action);
+      return { cardChannel: "im", cardId: null, cardSequence: null };
+    },
+  });
+
+  await controller.sync(task);
+
+  assert.equal(actions[0].type, "update");
+  assert.equal(actions[0].cardChannel, "cardkit");
+  assert.equal(actions[0].cardId, "card_123");
+  assert.equal(actions[0].cardSequence, 1);
+  assert.equal(task.snapshot().cardMessageId, "om_123");
+  assert.equal(task.snapshot().cardChannel, "im");
+  assert.equal(task.snapshot().cardId, null);
+  assert.equal(task.snapshot().cardSequence, null);
 });
 
 test("sync renders cards with configured footer fields", async () => {
