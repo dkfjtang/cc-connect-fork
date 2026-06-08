@@ -73,6 +73,14 @@ export function createBridgeApp({
       });
       return eventHandler;
     },
+    async stop() {
+      if (typeof appServer.stop === "function") {
+        await appServer.stop();
+      }
+      session = null;
+      runtime = null;
+      eventHandler = null;
+    },
   };
 }
 

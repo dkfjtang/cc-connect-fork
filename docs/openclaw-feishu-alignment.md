@@ -60,6 +60,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | 取消快路径 | 用户发送停止文本时快速中断当前任务 | 已支持取消文本识别、cancelled 卡片和 `turn/interrupt` |
 | 状态查询快路径 | 用户查询当前任务时刷新已有卡片，不打断长任务 | 已支持状态文本识别，并绕过同 chat 队列刷新 active task 卡片 |
 | 长连接可观测性 | WebSocket 启动、入站事件、dispatch 失败进入日志 | 已记录 WS 启动阶段、事件收到和 handler 失败的 JSONL 日志 |
+| 长驻进程退出治理 | 收到进程退出信号时释放 listener / 子进程资源 | 已注册 `SIGINT` / `SIGTERM`，按 app-server、transport 顺序 best-effort 停止并记录 JSONL 日志 |
 | 审批按钮权限 | 交互卡片操作也要受账号和群策略约束 | 已要求审批操作者命中全局 `open_id` 白名单；配置群 sender allowlist 时，按钮操作者也必须命中该群策略 |
 
 ## 近期差距
@@ -80,7 +81,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 
 | 优先级 | OpenClaw 源码能力 | fca 目标 |
 | --- | --- | --- |
-| P0 | 长连接启动、重连、事件分发和错误日志 | 已接入 SDK 长连接，并补充 WS lifecycle / event dispatch 结构化日志；后续继续补断线重连和退出信号治理 |
+| P0 | 长连接启动、重连、事件分发和错误日志 | 已接入 SDK 长连接，并补充 WS lifecycle / event dispatch 结构化日志；已补退出信号治理，后续继续补断线重连策略 |
 | P0 | 消息事件去重、回放过滤、自回声过滤 | 已实现基础护栏和持久化去重窗口，避免进程重启后重复处理 |
 | P0 | 持续回复卡片更新、节流和最终态兜底 | 已实现 running 节流、阶段标签更新、同一卡片互斥 flush、发送/更新错误分类退避和最终态更新；后续继续补 CardKit 降级策略 |
 | P0 | 卡片 footer 的状态、会话和排障字段 | 已展示 status / thread / turn / elapsed / token / cache / context / model / fca version / error type / cwd |

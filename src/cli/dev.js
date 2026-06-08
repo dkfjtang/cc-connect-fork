@@ -9,6 +9,7 @@ export async function runDev({
   errorOutput = process.stderr,
   transportFactory = (options) => new FeishuSdkTransport(options),
   appFactory = createBridgeApp,
+  signalRegistrar = process,
 } = {}) {
   if (!env.FEISHU_APP_ID || !env.FEISHU_APP_SECRET) {
     errorOutput.write(
@@ -58,5 +59,43 @@ export async function runDev({
     onMessageReceive: (payload) => app.eventHandler.handleMessageReceive(payload),
     onCardAction: (payload) => app.eventHandler.handleCardAction(payload),
   });
+  registerShutdownHandlers({
+    signalRegistrar,
+    logger,
+    app,
+    feishuTransport,
+  });
   return 0;
+}
+
+function registerShutdownHandlers({ signalRegistrar, logger, app, feishuTransport }) {
+  if (!signalRegistrar || typeof signalRegistrar.on !== "function") {
+    return;
+  }
+
+  let shutdownPromise = null;
+  const shutdown = async (signal) => {
+    if (shutdownPromise) {
+      return shutdownPromise;
+    }
+
+    shutdownPromise = (async () => {
+      logger.info("bridge.shutdown_requested", { signal });
+      try {
+        if (typeof app.stop === "function") {
+          await app.stop();
+        }
+      } finally {
+        if (typeof feishuTransport.stop === "function") {
+          await feishuTransport.stop();
+        }
+      }
+      logger.info("bridge.stopped", { signal });
+    })();
+
+    return shutdownPromise;
+  };
+
+  signalRegistrar.on("SIGINT", () => shutdown("SIGINT"));
+  signalRegistrar.on("SIGTERM", () => shutdown("SIGTERM"));
 }

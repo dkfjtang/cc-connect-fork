@@ -94,6 +94,37 @@ test("createBridgeApp exposes config for diagnostics", () => {
   assert.deepEqual(app.config.allowedOpenIds, ["ou_123"]);
 });
 
+test("createBridgeApp stop terminates the app-server process", async () => {
+  const calls = [];
+  const app = createBridgeApp({
+    env: {
+      FCA_ALLOWED_OPEN_IDS: "ou_123",
+      FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex",
+      FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
+    },
+    codexAppServerFactory: () => ({
+      start: async () => {
+        calls.push("start");
+        return { onEvent: () => () => {} };
+      },
+      stop: () => {
+        calls.push("stop");
+      },
+    }),
+    feishuTransport: {},
+    threadStoreFactory: () => ({
+      getThread: async () => null,
+      saveThread: async () => {},
+    }),
+    messageDedupStoreFactory: emptyMessageDedupStore,
+  });
+
+  await app.start();
+  await app.stop();
+
+  assert.deepEqual(calls, ["start", "stop"]);
+});
+
 test("createThreadStore selects configured thread store driver", () => {
   assert.ok(
     createThreadStore({

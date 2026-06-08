@@ -8,6 +8,7 @@ export class FeishuSdkTransport {
   #createWsClient;
   #logger;
   #clientPromise = null;
+  #wsClient = null;
 
   constructor({
     appId,
@@ -131,6 +132,7 @@ export class FeishuSdkTransport {
       appId: this.#appId,
       appSecret: this.#appSecret,
     });
+    this.#wsClient = wsClient;
     this.#log("info", "feishu.ws_client_created");
 
     try {
@@ -140,6 +142,14 @@ export class FeishuSdkTransport {
     } catch (error) {
       this.#log("error", "feishu.ws_start_failed", errorLogFields(error));
       throw error;
+    }
+  }
+
+  async stop() {
+    const wsClient = this.#wsClient;
+    this.#wsClient = null;
+    if (wsClient && typeof wsClient.close === "function") {
+      await wsClient.close({});
     }
   }
 

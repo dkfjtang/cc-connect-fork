@@ -281,6 +281,33 @@ test("startMessageListener logs websocket start failures", async () => {
   });
 });
 
+test("stop closes started WS client", async () => {
+  const calls = [];
+  const transport = new FeishuSdkTransport({
+    appId: "cli_123",
+    appSecret: "secret",
+    createClient: () => ({}),
+    createEventDispatcher: () => ({
+      register: () => {},
+    }),
+    createWsClient: () => ({
+      start: async () => {
+        calls.push("start");
+      },
+      close: async (params = {}) => {
+        calls.push({ type: "close", params });
+      },
+    }),
+  });
+
+  await transport.startMessageListener({
+    onMessageReceive: async () => {},
+  });
+  await transport.stop();
+
+  assert.deepEqual(calls, ["start", { type: "close", params: {} }]);
+});
+
 test("constructor requires app credentials", () => {
   assert.throws(
     () =>

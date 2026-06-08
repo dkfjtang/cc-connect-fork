@@ -149,3 +149,60 @@ test("runDev creates JSON logger from configured log level", async () => {
     messageId: "msg_123",
   });
 });
+
+test("runDev registers shutdown signal handlers and stops resources", async () => {
+  const calls = [];
+  const signalHandlers = {};
+  let logText = "";
+  const transport = {
+    probeBot: async () => ({ ok: true, botOpenId: "ou_bot", botName: "Codex" }),
+    startMessageListener: async () => {
+      calls.push("listen");
+    },
+    stop: async () => {
+      calls.push("transport.stop");
+    },
+  };
+  const app = {
+    config: { defaultWorkdir: "F:\\development\\f-codex" },
+    start: async () => {
+      calls.push("app.start");
+    },
+    stop: async () => {
+      calls.push("app.stop");
+    },
+  };
+
+  const exitCode = await runDev({
+    env: {
+      FEISHU_APP_ID: "cli_123",
+      FEISHU_APP_SECRET: "secret",
+      FCA_ALLOWED_OPEN_IDS: "ou_123",
+      FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex",
+      FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
+    },
+    output: { write: () => {} },
+    errorOutput: { write: (text) => (logText += text) },
+    transportFactory: () => transport,
+    appFactory: () => app,
+    signalRegistrar: {
+      on: (signal, handler) => {
+        signalHandlers[signal] = handler;
+      },
+    },
+  });
+
+  assert.equal(exitCode, 0);
+  assert.equal(typeof signalHandlers.SIGINT, "function");
+  assert.equal(typeof signalHandlers.SIGTERM, "function");
+
+  await signalHandlers.SIGTERM();
+
+  assert.deepEqual(calls, ["app.start", "listen", "app.stop", "transport.stop"]);
+  const logs = logText
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+  assert.equal(logs.some((entry) => entry.event === "bridge.shutdown_requested" && entry.signal === "SIGTERM"), true);
+  assert.equal(logs.some((entry) => entry.event === "bridge.stopped" && entry.signal === "SIGTERM"), true);
+});

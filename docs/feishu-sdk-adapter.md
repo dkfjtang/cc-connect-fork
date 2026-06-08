@@ -44,6 +44,8 @@ TaskCardController
     onMessageReceive,
     onCardAction,
   }) => {},
+
+  stop: async () => {},
 }
 ```
 
@@ -61,8 +63,12 @@ TaskCardController
 - `feishu.ws_start_failed`
 - `feishu.event_received`
 - `feishu.event_handler_failed`
+- `bridge.shutdown_requested`
+- `bridge.stopped`
 
 日志只记录 `appId`、事件类型、`message_id`、`chat_id`、`chat_type` 和错误摘要；不记录 `appSecret`、verification token、encrypt key、消息正文或完整事件 payload。
+
+`runDev` 会注册 `SIGINT` / `SIGTERM` 退出信号。收到信号后，Bridge 先停止 Codex app-server，再 best-effort 调用 transport `stop()`；当前 SDK transport 没有额外敏感信息输出，后续如接入可显式关闭的 WS client，应继续复用这个接口。
 
 ## 卡片更新重试
 
