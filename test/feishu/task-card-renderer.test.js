@@ -163,3 +163,24 @@ test("renderTaskCard truncates overly long card body", () => {
   assert.equal(card.elements[0].text.content.length, 1003);
   assert.match(card.elements[0].text.content, /\.\.\.$/);
 });
+
+test("renderTaskCard bounds card payload when body and footer fields are long", () => {
+  const card = renderTaskCard({
+    taskId: "task_123",
+    status: "completed",
+    cwd: `F:\\development\\${"nested\\".repeat(1000)}f-codex`,
+    summaryText: "summary",
+    finalText: "完成".repeat(5000),
+    threadId: `thr_${"1".repeat(500)}`,
+    turnId: `turn_${"2".repeat(500)}`,
+    model: `gpt-${"x".repeat(500)}`,
+    appVersion: `0.2.0-${"build".repeat(200)}`,
+    errorSummary: null,
+  });
+
+  const footer = card.elements.at(-1).elements[0].content;
+  assert.ok(JSON.stringify(card).length < 5000);
+  assert.ok(footer.length < 800);
+  assert.equal(footer.includes("nested\\nested\\nested\\nested"), false);
+  assert.match(footer, /\.\.\./);
+});

@@ -49,7 +49,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | --- | --- | --- |
 | 私聊文本入口 | 支持 DM 消息进入 Agent | 已支持私聊文本解析 |
 | 群聊 @ 入口 | 群聊需要按 mention、群配置和发送者策略触发 | 已支持明确 @ 当前 bot 的群聊文本，可用 `FCA_ALLOWED_GROUP_CHAT_IDS` 限制群 `chat_id`，并可用 `FCA_GROUP_SENDER_OPEN_IDS` 对指定群进一步收紧 sender |
-| 卡片持续更新 | 先发卡片，再更新同一张卡片 | 已有 send / update action 和 controller，并串行化同一卡片更新；限频错误会指数退避，非重试业务错误会快速失败 |
+| 卡片持续更新 | 先发卡片，再更新同一张卡片 | 已有 send / update action 和 controller，并串行化同一卡片更新；限频错误会指数退避，非重试业务错误会快速失败；卡片正文和 footer 会做尺寸收敛 |
 | footer | 可展示状态、耗时、模型、token 等 | 已展示 status / thread / turn / elapsed / token / cache / context / model / fca version / error type / cwd |
 | app 归属校验 | 事件 app_id 不匹配时丢弃 | 已支持 `FEISHU_APP_ID` 校验 |
 | 自回声过滤 | bot 自己发出的消息不再处理 | 已支持 `botOpenId` 过滤入口 |
@@ -149,7 +149,7 @@ OpenClaw 的卡片链路包含：
 fca 的目标：
 
 - MVP：普通 IM 卡片 send + patch，running / completed / failed 三态稳定。
-- 已增加运行中更新节流、同一卡片互斥 flush、发送/更新错误分类退避、per-chat queue 和飞书 API 错误归一化。
+- 已增加运行中更新节流、同一卡片互斥 flush、发送/更新错误分类退避、卡片 payload 尺寸保护、per-chat queue 和飞书 API 错误归一化。
 - 后续：再评估 CardKit 2.0 和 footer 字段可配置化。
 
 ## 不对齐项

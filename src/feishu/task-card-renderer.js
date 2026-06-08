@@ -1,4 +1,5 @@
 const BODY_LIMIT = 1000;
+const FOOTER_FIELD_LIMIT = 120;
 
 const STATUS_META = {
   queued: { title: "任务已接收", template: "blue" },
@@ -141,13 +142,17 @@ function footerText(snapshot) {
     snapshot.turnId ? `turn: ${shortId(snapshot.turnId)}` : null,
     typeof snapshot.elapsedMs === "number" ? `耗时: ${formatElapsed(snapshot.elapsedMs)}` : null,
     tokenUsageText(snapshot.tokenUsage),
-    snapshot.model ? `model: ${snapshot.model}` : null,
-    snapshot.appVersion ? `fca: ${snapshot.appVersion}` : null,
-    snapshot.errorType ? `错误: ${snapshot.errorType}` : null,
-    snapshot.cwd ? `cwd: ${snapshot.cwd}` : null,
+    footerField("model", snapshot.model),
+    footerField("fca", snapshot.appVersion),
+    footerField("错误", snapshot.errorType),
+    snapshot.cwd ? `cwd: ${compactPath(snapshot.cwd)}` : null,
   ]
     .filter(Boolean)
     .join(" | ");
+}
+
+function footerField(label, value) {
+  return value ? `${label}: ${truncateMiddle(String(value), FOOTER_FIELD_LIMIT)}` : null;
 }
 
 function tokenUsageText(tokenUsage) {
@@ -175,6 +180,17 @@ function tokenUsageText(tokenUsage) {
 
 function shortId(value) {
   return value.slice(0, 8);
+}
+
+function compactPath(value) {
+  const text = String(value);
+  if (text.length <= FOOTER_FIELD_LIMIT) {
+    return text;
+  }
+
+  const segments = text.split(/[\\/]+/).filter(Boolean);
+  const tail = segments.slice(-2).join("\\") || text;
+  return truncateMiddle(tail, FOOTER_FIELD_LIMIT);
 }
 
 function formatElapsed(elapsedMs) {
@@ -212,4 +228,19 @@ function truncate(value, limit) {
   }
 
   return `${text.slice(0, limit)}...`;
+}
+
+function truncateMiddle(value, limit) {
+  const text = value || "";
+  if (text.length <= limit) {
+    return text;
+  }
+
+  if (limit <= 3) {
+    return ".".repeat(limit);
+  }
+
+  const prefixLength = Math.ceil((limit - 3) / 2);
+  const suffixLength = Math.floor((limit - 3) / 2);
+  return `${text.slice(0, prefixLength)}...${text.slice(-suffixLength)}`;
 }

@@ -121,6 +121,7 @@ Done 标准：
 - `FeishuMessageClient` 已将飞书 API `code/msg` 和 transport 异常归一为 `FeishuApiError`，结构化日志会记录 `errorName`、`errorCode` 和 `errorActionType`。
 - `TaskCardController` 已串行化同一卡片的 send / update，避免运行中 patch 与最终态 patch 并发乱序。
 - `TaskCardController` 已对卡片 send / update 做有限重试和错误分类退避：限频错误指数退避，非重试业务错误快速失败；超过重试次数后仍向上抛出，交给 runtime 结构化日志记录。
+- `TaskCardRenderer` 已对卡片正文和 footer 字段做尺寸收敛，避免超长输出、模型名、版本号或路径撑爆飞书卡片 payload。
 - `FeishuEventHandler` 已通过 JSON 文件 message dedup store 持久化 `message_id` 去重窗口，降低重连或进程重启回放导致的重复执行风险。
 - `RuntimeTask` 和任务卡片 footer 已补充 `elapsedMs`、运行时长展示和 `errorType`，便于按卡片直接判断耗时和失败类别。
 - `FCA_CODEX_MODEL` 已贯穿到 Codex `thread/start`、任务 snapshot 和卡片 footer；`FCA_VERSION` 已进入配置检查和 footer。

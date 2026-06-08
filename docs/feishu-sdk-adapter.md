@@ -74,6 +74,14 @@ TaskCardController
 - 无明确飞书错误码的 transport / 网络异常沿用普通短退避。
 - 带明确飞书业务错误码且非限频的错误不重试，避免无效 payload 或权限错误反复打 API。
 
+## 卡片尺寸保护
+
+`TaskCardRenderer` 会在渲染阶段收敛卡片正文和 footer 字段：
+
+- 正文摘要和最终回复会截断到固定上限。
+- footer 中的 model、版本、错误类型等字段会单项截断。
+- 工作目录超长时只保留短路径尾部并截断，避免长路径撑爆卡片 payload。
+
 ## 发送卡片
 
 输入 action：
@@ -135,4 +143,3 @@ transport payload：
 ## 后续接入点
 
 - 增加长连接断线、重连和退出信号治理。
-- 增加消息长度和卡片 payload 尺寸保护。
