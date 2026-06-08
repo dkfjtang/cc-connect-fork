@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import { loadConfig } from "../../src/config/app-config.js";
@@ -48,6 +51,45 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
   assert.equal(config.messageDedupTtlSeconds, 3600);
   assert.equal(config.turnTimeoutSeconds, 120);
   assert.equal(config.approvalTimeoutSeconds, 30);
+});
+
+test("loadConfig merges group configuration file with env group settings", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fca-config-"));
+  const groupConfigPath = join(dir, "groups.json");
+  writeFileSync(
+    groupConfigPath,
+    JSON.stringify({
+      groups: [
+        {
+          chatId: "oc_file",
+          allowedSenderOpenIds: ["ou_file_1", "ou_file_2"],
+          developerInstructions: "只处理文件配置项目",
+        },
+        {
+          chatId: "oc_open",
+        },
+      ],
+    }),
+    "utf8",
+  );
+
+  const config = loadConfig({
+    FCA_ALLOWED_GROUP_CHAT_IDS: "oc_env",
+    FCA_GROUP_SENDER_OPEN_IDS: "oc_env=ou_env;oc_file=ou_env_file",
+    FCA_GROUP_DEVELOPER_INSTRUCTIONS: "oc_env=只处理环境变量项目",
+    FCA_GROUP_CONFIG_PATH: groupConfigPath,
+  });
+
+  assert.equal(config.groupConfigPath, groupConfigPath);
+  assert.deepEqual(config.allowedGroupChatIds, ["oc_env", "oc_file", "oc_open"]);
+  assert.deepEqual(config.groupSenderOpenIds, {
+    oc_env: ["ou_env"],
+    oc_file: ["ou_env_file", "ou_file_1", "ou_file_2"],
+  });
+  assert.deepEqual(config.groupDeveloperInstructions, {
+    oc_env: "只处理环境变量项目",
+    oc_file: "只处理文件配置项目",
+  });
 });
 
 test("loadConfig uses safe local defaults when optional values are missing", () => {
@@ -112,6 +154,17 @@ test("loadConfig rejects malformed group developer instructions", () => {
   assert.throws(
     () => loadConfig({ FCA_GROUP_DEVELOPER_INSTRUCTIONS: "oc_1" }),
     /FCA_GROUP_DEVELOPER_INSTRUCTIONS entries must use chat_id=instructions/,
+  );
+});
+
+test("loadConfig rejects malformed group configuration file", () => {
+  const dir = mkdtempSync(join(tmpdir(), "fca-config-"));
+  const groupConfigPath = join(dir, "groups.json");
+  writeFileSync(groupConfigPath, JSON.stringify({ groups: [{ allowedSenderOpenIds: ["ou_1"] }] }), "utf8");
+
+  assert.throws(
+    () => loadConfig({ FCA_GROUP_CONFIG_PATH: groupConfigPath }),
+    /FCA_GROUP_CONFIG_PATH groups entries must include chatId/,
   );
 });
 

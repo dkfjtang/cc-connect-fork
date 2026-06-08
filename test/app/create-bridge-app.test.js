@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { test } from "node:test";
 
 import { createBridgeApp, createThreadStore } from "../../src/app/create-bridge-app.js";
@@ -333,6 +336,68 @@ test("createBridgeApp passes group sender policy to event handler", async () => 
   });
 
   assert.deepEqual(result, { status: "skipped", reason: "Feishu group sender is not allowed" });
+});
+
+test("createBridgeApp applies group config file to event handler", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "fca-group-config-"));
+  const groupConfigPath = join(dir, "groups.json");
+  writeFileSync(
+    groupConfigPath,
+    JSON.stringify({
+      groups: [
+        {
+          chatId: "oc_allowed",
+          allowedSenderOpenIds: ["ou_allowed"],
+          developerInstructions: "只处理群配置文件项目",
+        },
+      ],
+    }),
+    "utf8",
+  );
+
+  const app = createBridgeApp({
+    env: {
+      FCA_ALLOWED_OPEN_IDS: "ou_allowed,ou_denied",
+      FCA_GROUP_CONFIG_PATH: groupConfigPath,
+      FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex",
+      FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
+    },
+    botOpenId: "ou_bot",
+    codexAppServerFactory: () => ({
+      start: async () => ({
+        onEvent: () => () => {},
+      }),
+    }),
+    feishuTransport: {},
+    threadStoreFactory: () => ({
+      getThread: async () => null,
+      saveThread: async () => {},
+    }),
+    messageDedupStoreFactory: emptyMessageDedupStore,
+  });
+
+  await app.start();
+  const result = await app.eventHandler.handleMessageReceive({
+    event: {
+      sender: { sender_id: { open_id: "ou_denied" } },
+      message: {
+        message_id: "om_123",
+        chat_id: "oc_allowed",
+        chat_type: "group",
+        message_type: "text",
+        content: JSON.stringify({
+          text: "@_user_1 hello",
+          mentions: [{ key: "@_user_1", id: { open_id: "ou_bot" } }],
+        }),
+      },
+    },
+  });
+
+  assert.deepEqual(result, { status: "skipped", reason: "Feishu group sender is not allowed" });
+  assert.deepEqual(app.config.allowedGroupChatIds, ["oc_allowed"]);
+  assert.deepEqual(app.config.groupDeveloperInstructions, {
+    oc_allowed: "只处理群配置文件项目",
+  });
 });
 
 function emptyMessageDedupStore() {

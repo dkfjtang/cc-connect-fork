@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 const DEFAULT_CODEX_BIN = "codex";
 const DEFAULT_CODEX_LISTEN = "stdio://";
 const DEFAULT_LOG_LEVEL = "info";
@@ -12,6 +14,16 @@ const DEFAULT_APP_VERSION = "0.1.0";
 
 export function loadConfig(env = process.env) {
   const allowedWorkdirs = splitList(env.FCA_ALLOWED_WORKDIRS, ";");
+  const groupConfigPath = env.FCA_GROUP_CONFIG_PATH?.trim() || null;
+  const groupConfig = parseGroupConfigFile(groupConfigPath);
+  const groupSenderOpenIds = mergeGroupSenderOpenIds(
+    parseGroupSenderOpenIds(env.FCA_GROUP_SENDER_OPEN_IDS),
+    groupConfig.groupSenderOpenIds,
+  );
+  const groupDeveloperInstructions = {
+    ...parseGroupDeveloperInstructions(env.FCA_GROUP_DEVELOPER_INSTRUCTIONS),
+    ...groupConfig.groupDeveloperInstructions,
+  };
   const turnTimeoutSeconds = parsePositiveInteger(
     env.FCA_TURN_TIMEOUT_SECONDS,
     DEFAULT_TURN_TIMEOUT_SECONDS,
@@ -32,11 +44,14 @@ export function loadConfig(env = process.env) {
   return {
     feishuAppId: env.FEISHU_APP_ID?.trim() || null,
     allowedOpenIds: splitList(env.FCA_ALLOWED_OPEN_IDS, ","),
-    allowedGroupChatIds: splitList(env.FCA_ALLOWED_GROUP_CHAT_IDS, ","),
-    groupSenderOpenIds: parseGroupSenderOpenIds(env.FCA_GROUP_SENDER_OPEN_IDS),
-    groupDeveloperInstructions: parseGroupDeveloperInstructions(
-      env.FCA_GROUP_DEVELOPER_INSTRUCTIONS,
-    ),
+    allowedGroupChatIds: unique([
+      ...splitList(env.FCA_ALLOWED_GROUP_CHAT_IDS, ","),
+      ...groupConfig.allowedGroupChatIds,
+    ]),
+    groupSenderOpenIds,
+    groupDeveloperInstructions,
+    groupConfigPath,
+    groupConfigCount: groupConfig.allowedGroupChatIds.length,
     allowedWorkdirs,
     defaultWorkdir: env.FCA_DEFAULT_WORKDIR?.trim() || null,
     codexBin: env.FCA_CODEX_BIN?.trim() || DEFAULT_CODEX_BIN,
@@ -53,6 +68,88 @@ export function loadConfig(env = process.env) {
     turnTimeoutSeconds,
     approvalTimeoutSeconds,
   };
+}
+
+function parseGroupConfigFile(filePath) {
+  if (!filePath) {
+    return {
+      allowedGroupChatIds: [],
+      groupSenderOpenIds: {},
+      groupDeveloperInstructions: {},
+    };
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(readFileSync(filePath, "utf8"));
+  } catch (error) {
+    throw new Error(`FCA_GROUP_CONFIG_PATH could not be read as JSON: ${error.message}`);
+  }
+
+  if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.groups)) {
+    throw new Error("FCA_GROUP_CONFIG_PATH must contain a JSON object with a groups array");
+  }
+
+  const allowedGroupChatIds = [];
+  const groupSenderOpenIds = {};
+  const groupDeveloperInstructions = {};
+
+  for (const group of parsed.groups) {
+    if (group?.enabled === false) {
+      continue;
+    }
+
+    const chatId = typeof group?.chatId === "string" ? group.chatId.trim() : "";
+    if (!chatId) {
+      throw new Error("FCA_GROUP_CONFIG_PATH groups entries must include chatId");
+    }
+
+    allowedGroupChatIds.push(chatId);
+
+    if (group.allowedSenderOpenIds !== undefined) {
+      if (!Array.isArray(group.allowedSenderOpenIds)) {
+        throw new Error("FCA_GROUP_CONFIG_PATH allowedSenderOpenIds must be an array");
+      }
+      const openIds = group.allowedSenderOpenIds
+        .map((openId) => (typeof openId === "string" ? openId.trim() : ""))
+        .filter(Boolean);
+      if (openIds.length > 0) {
+        groupSenderOpenIds[chatId] = unique(openIds);
+      }
+    }
+
+    if (group.developerInstructions !== undefined) {
+      const instructions =
+        typeof group.developerInstructions === "string"
+          ? group.developerInstructions.trim()
+          : "";
+      if (!instructions) {
+        throw new Error("FCA_GROUP_CONFIG_PATH developerInstructions must be a non-empty string");
+      }
+      groupDeveloperInstructions[chatId] = instructions;
+    }
+  }
+
+  return {
+    allowedGroupChatIds: unique(allowedGroupChatIds),
+    groupSenderOpenIds,
+    groupDeveloperInstructions,
+  };
+}
+
+function mergeGroupSenderOpenIds(...configs) {
+  const result = {};
+  for (const config of configs) {
+    for (const [chatId, openIds] of Object.entries(config)) {
+      result[chatId] = unique([...(result[chatId] ?? []), ...openIds]);
+    }
+  }
+
+  return result;
+}
+
+function unique(values) {
+  return [...new Set(values)];
 }
 
 function defaultThreadStorePath(driver) {

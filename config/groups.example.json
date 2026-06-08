@@ -1,0 +1,12 @@
+{
+  "groups": [
+    {
+      "chatId": "oc_xxx",
+      "allowedSenderOpenIds": ["ou_1", "ou_2"],
+      "developerInstructions": "只处理这个群对应的项目上下文。"
+    },
+    {
+      "chatId": "oc_open"
+    }
+  ]
+}

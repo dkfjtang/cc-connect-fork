@@ -50,6 +50,8 @@ test("checkConfig accepts a complete MVP configuration", () => {
     summary: {
       allowedOpenIdCount: 1,
       allowedGroupChatIdCount: 0,
+      groupConfigPath: null,
+      groupConfigCount: 0,
       groupSenderPolicyCount: 0,
       groupDeveloperInstructionCount: 0,
       allowedWorkdirCount: 1,
@@ -102,6 +104,8 @@ test("runCheckConfig prints summary and returns zero on valid config", async () 
   assert.match(stdout, /Configuration check passed/);
   assert.match(stdout, /allowedOpenIds: 1/);
   assert.match(stdout, /allowedGroupChatIds: 0/);
+  assert.match(stdout, /groupConfigPath: none/);
+  assert.match(stdout, /groupConfigGroups: 0/);
   assert.match(stdout, /groupSenderPolicies: 0/);
   assert.match(stdout, /groupDeveloperInstructions: 0/);
   assert.match(stdout, /codexModel: default/);

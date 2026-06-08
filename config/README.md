@@ -5,6 +5,7 @@
 当前提供:
 
 - `.env.example`
+- `groups.example.json`
 
 ## 配置项
 
@@ -18,6 +19,7 @@
 | `FCA_ALLOWED_GROUP_CHAT_IDS` | 允许触发 fca 的飞书群聊 `chat_id` 列表；留空时不限制已 @ Bot 的群聊。 |
 | `FCA_GROUP_SENDER_OPEN_IDS` | 可选的群内 sender 收紧策略，格式为 `chat_id=open_id,open_id;chat_id=open_id`。 |
 | `FCA_GROUP_DEVELOPER_INSTRUCTIONS` | 可选的群级 Codex developer instructions，格式为 `chat_id=instructions;chat_id=instructions`。 |
+| `FCA_GROUP_CONFIG_PATH` | 可选的群级 JSON 配置文件路径，用于集中维护群 allowlist、群内 sender 收紧策略和群级 developer instructions。 |
 | `FCA_ALLOWED_WORKDIRS` | 允许 Codex 使用的本地工作目录列表。 |
 | `FCA_DEFAULT_WORKDIR` | 默认工作目录。 |
 | `FCA_CODEX_BIN` | Codex CLI 命令路径，默认可为 `codex`。 |
@@ -49,6 +51,7 @@ npm run check-config
 - `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET` 是否存在。
 - `FCA_ALLOWED_OPEN_IDS` 是否至少包含一个 `open_id`。
 - `FCA_ALLOWED_GROUP_CHAT_IDS` 的配置数量会在摘要中展示；留空不报错。
+- `FCA_GROUP_CONFIG_PATH` 的文件路径和群配置数量会在摘要中展示；文件格式错误会报错。
 - `FCA_GROUP_SENDER_OPEN_IDS` 的策略数量会在摘要中展示；格式错误会报错。
 - `FCA_GROUP_DEVELOPER_INSTRUCTIONS` 的配置数量会在摘要中展示；格式错误会报错。
 - `FCA_ALLOWED_WORKDIRS` 是否至少包含一个本地目录。
@@ -67,6 +70,29 @@ FCA_THREAD_STORE_PATH=data/threads.sqlite
 ```
 
 SQLite 后端同样按会话维度保存映射：私聊使用 `open_id + cwd`，群聊使用 `chat_id + cwd`。
+
+## Group Config
+
+`FCA_GROUP_CONFIG_PATH` 指向一个 JSON 文件。文件中的群配置会和环境变量中的 `FCA_ALLOWED_GROUP_CHAT_IDS`、`FCA_GROUP_SENDER_OPEN_IDS`、`FCA_GROUP_DEVELOPER_INSTRUCTIONS` 合并；同一群的 sender open_id 取并集，文件里的 developer instructions 覆盖同群环境变量值。
+
+示例：
+
+```json
+{
+  "groups": [
+    {
+      "chatId": "oc_xxx",
+      "allowedSenderOpenIds": ["ou_1", "ou_2"],
+      "developerInstructions": "只处理这个群对应的项目上下文。"
+    },
+    {
+      "chatId": "oc_open"
+    }
+  ]
+}
+```
+
+该文件只收紧群入口和补充群上下文，不会绕过 `FCA_ALLOWED_OPEN_IDS` 全局白名单。
 
 从 JSON 切换到 SQLite 前可先 dry-run：
 

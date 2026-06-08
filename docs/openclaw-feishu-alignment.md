@@ -48,7 +48,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | 能力 | OpenClaw 行为 | fca 当前状态 |
 | --- | --- | --- |
 | 私聊文本入口 | 支持 DM 消息进入 Agent | 已支持私聊文本解析 |
-| 群聊 @ 入口 | 群聊需要按 mention、群配置和发送者策略触发 | 已支持明确 @ 当前 bot 的群聊文本，可用 `FCA_ALLOWED_GROUP_CHAT_IDS` 限制群 `chat_id`，并可用 `FCA_GROUP_SENDER_OPEN_IDS` 对指定群进一步收紧 sender |
+| 群聊 @ 入口 | 群聊需要按 mention、群配置和发送者策略触发 | 已支持明确 @ 当前 bot 的群聊文本，可用 `FCA_ALLOWED_GROUP_CHAT_IDS` 或 `FCA_GROUP_CONFIG_PATH` 限制群 `chat_id`，并可用群内 sender allowlist 进一步收紧 sender |
 | 卡片持续更新 | 先发卡片，再更新同一张卡片 | 已有 send / update action 和 controller，并串行化同一卡片更新；限频错误会指数退避，非重试业务错误会快速失败；卡片正文和 footer 会做尺寸收敛 |
 | footer | 可展示状态、耗时、模型、token 等 | 已展示 status / thread / turn / elapsed / token / cache / context / model / fca version / error type / cwd |
 | app 归属校验 | 事件 app_id 不匹配时丢弃 | 已支持 `FEISHU_APP_ID` 校验 |
@@ -84,7 +84,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | P0 | 消息事件去重、回放过滤、自回声过滤 | 已实现基础护栏和持久化去重窗口，避免进程重启后重复处理 |
 | P0 | 持续回复卡片更新、节流和最终态兜底 | 已实现 running 节流、阶段标签更新、同一卡片互斥 flush、发送/更新错误分类退避和最终态更新；后续继续补 CardKit 降级策略 |
 | P0 | 卡片 footer 的状态、会话和排障字段 | 已展示 status / thread / turn / elapsed / token / cache / context / model / fca version / error type / cwd |
-| P1 | 群聊 @、群配置和发送者策略 | 已实现 @ 触发、可选群 `chat_id` allowlist、全局发送者 `open_id` 白名单、群内 sender 收紧策略和群级 developer instructions |
+| P1 | 群聊 @、群配置和发送者策略 | 已实现 @ 触发、可选群 `chat_id` allowlist、群级 JSON 配置文件、全局发送者 `open_id` 白名单、群内 sender 收紧策略和群级 developer instructions |
 | P1 | 敏感操作确认卡片 | 已映射到 Codex approval server request，展示风险等级、固定枚举风险因素和脱敏范围摘要；不复用 OpenClaw tool approval 内核，后续增强详情确认页 |
 | P1 | CardKit 2.0 与普通卡片降级 | 先保留 IM patch；后续实现 CardKit 优先、IM patch fallback |
 
