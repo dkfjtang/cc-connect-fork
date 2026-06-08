@@ -241,7 +241,8 @@ test("approval request moves task to waiting approval without raw details", () =
     status: "pending",
     summary: "Codex 请求执行命令，需要审批。",
     risk: "中",
-    details: ["风险: 中", "目录: f-codex"],
+    riskReasons: ["命令审批"],
+    details: ["风险: 中", "风险因素: 命令审批", "目录: f-codex"],
   });
   assert.equal(JSON.stringify(snapshot.approval).includes("secret.txt"), false);
 });
@@ -268,8 +269,10 @@ test("approval request summarizes command actions without raw command details", 
 
   const approval = task.snapshot().approval;
   assert.equal(approval.risk, "高");
+  assert.deepEqual(approval.riskReasons, ["命令审批", "网络访问"]);
   assert.deepEqual(approval.details, [
     "风险: 高",
+    "风险因素: 命令审批 / 网络访问",
     "目录: f-codex",
     "命令动作: 读取 1 / 搜索 1",
     "网络目标: api.example.com",
@@ -292,15 +295,18 @@ test("file change approval summarizes counts and extensions without paths or dif
       fileChanges: {
         "F:\\development\\f-codex\\secret.txt": { type: "update", unified_diff: "-password\n+token" },
         "F:\\development\\f-codex\\src\\app.js": { type: "add", content: "secret" },
+        "F:\\development\\f-codex\\old.env": { type: "delete", content: "secret" },
       },
     },
   });
 
   const approval = task.snapshot().approval;
+  assert.deepEqual(approval.riskReasons, ["文件变更", "删除文件"]);
   assert.deepEqual(approval.details, [
     "风险: 高",
+    "风险因素: 文件变更 / 删除文件",
     "目录: f-codex",
-    "文件变更: 2 个 (修改 1 / 新增 1), 扩展名: .txt, .js",
+    "文件变更: 3 个 (修改 1 / 新增 1 / 删除 1), 扩展名: .txt, .js, .env",
   ]);
   assert.equal(JSON.stringify(approval).includes("secret.txt"), false);
   assert.equal(JSON.stringify(approval).includes("password"), false);
@@ -329,8 +335,10 @@ test("permissions approval summarizes requested permission counts", () => {
   });
 
   const approval = task.snapshot().approval;
+  assert.deepEqual(approval.riskReasons, ["权限变更", "文件写入", "网络开启", "包含说明"]);
   assert.deepEqual(approval.details, [
     "风险: 高",
+    "风险因素: 权限变更 / 文件写入 / 网络开启 / 包含说明",
     "目录: f-codex",
     "权限: 读 1 / 写 2 / 网络开启",
     "包含说明: 是",

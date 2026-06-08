@@ -130,7 +130,7 @@ Done 标准：
 - app-server JSON-RPC server request 已进入分发层；approval request 会把任务切到 `waiting_approval`、更新脱敏卡片，并通过飞书按钮回写 app-server decision；无人处理超时后默认回写 `decline`。
 - app-server 子进程退出已转换为 `appServer/disconnected` 本地事件；runtime 会把 active task 标记为 failed，失败卡片先同步一次，再进入最终同步和 `task.failed` 日志。
 - `FCA_APPROVAL_TIMEOUT_SECONDS` 已提供审批请求等待时间配置；超时后会记录 `task.approval_timeout` 并 best-effort 同步卡片。
-- 审批卡片已展示风险等级和脱敏范围摘要，包括目录别名、命令动作类型数量、文件变更数量和扩展名、权限读写数量、网络目标域名。
+- 审批卡片已展示风险等级、固定枚举风险因素和脱敏范围摘要，包括目录别名、命令动作类型数量、文件变更数量和扩展名、权限读写数量、网络目标域名。
 - Thread Store 默认继续使用 JSON 文件，并已支持 `FCA_THREAD_STORE_DRIVER=sqlite` 的可选 SQLite 后端。
 - `npm run migrate:thread-store` 已提供 JSON thread store 到 SQLite 的 dry-run 和迁移能力。
 - 飞书 `状态` / `/status` 控制命令已走 active task 快路径，绕过同会话队列刷新当前任务卡片，不新建 Codex turn。
@@ -148,7 +148,7 @@ Done 标准：
 
 候选能力：
 
-- 审批卡片详情确认页和更细风险分级。
+- 审批卡片详情确认页。
 - CardKit 2.0 流式卡片，失败后回退 IM patch。
 - 文件下载和回传。
 - 群级配置文件。

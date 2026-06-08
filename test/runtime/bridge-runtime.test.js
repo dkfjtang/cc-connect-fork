@@ -437,6 +437,7 @@ test("resolveApproval answers pending app-server approval request", async () => 
     markEventReady = resolve;
   });
   const syncSnapshots = [];
+  const logEntries = [];
   let approvalTimer;
   const runtime = new BridgeRuntime({
     policy: allowDefaultPolicy(),
@@ -467,6 +468,7 @@ test("resolveApproval answers pending app-server approval request", async () => 
     clearTimeoutFn: () => {
       approvalTimer = null;
     },
+    logger: fakeLogger(logEntries),
   });
 
   const pendingTask = runtime.handleTextMessage({
@@ -510,6 +512,10 @@ test("resolveApproval answers pending app-server approval request", async () => 
   assert.equal(approvalTimer, null);
   assert.equal(syncSnapshots.at(-1).approval.status, "accepted");
   assert.equal(JSON.stringify(syncSnapshots.at(-1).approval).includes("secret.txt"), false);
+  assert.deepEqual(
+    logEntries.find((entry) => entry.event === "task.approval_requested").approvalRiskReasons,
+    ["命令审批"],
+  );
 
   emitEvent({ method: "turn/completed", params: { status: "success" } });
   await pendingTask;

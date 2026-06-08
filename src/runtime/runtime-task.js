@@ -168,6 +168,9 @@ export class RuntimeTask {
       this.#turnId = params.turnId;
     }
 
+    const risk = approvalRisk(event.method, params);
+    const riskReasons = approvalRiskReasons(event.method, params);
+
     this.#approval = {
       requestId: event.requestId ?? null,
       method: event.method,
@@ -176,8 +179,9 @@ export class RuntimeTask {
       type: approvalType(event.method),
       status: "pending",
       summary: approvalSummary(event.method),
-      risk: approvalRisk(event.method, params),
-      details: approvalDetails(event.method, params),
+      risk,
+      riskReasons,
+      details: approvalDetails(event.method, params, risk, riskReasons),
     };
   }
 
@@ -289,9 +293,47 @@ function approvalRisk(method, params = {}) {
   return "中";
 }
 
-function approvalDetails(method, params = {}) {
+function approvalRiskReasons(method, params = {}) {
+  const type = approvalType(method);
+  const reasons = [];
+
+  if (type === "command") {
+    reasons.push("命令审批");
+  }
+
+  if (type === "file_change") {
+    reasons.push("文件变更");
+    if (fileChangesIncludeDelete(params.fileChanges)) {
+      reasons.push("删除文件");
+    }
+  }
+
+  if (type === "permissions") {
+    reasons.push("权限变更");
+    const fileSystem = params.permissions?.fileSystem ?? {};
+    if (Array.isArray(fileSystem.write) && fileSystem.write.length > 0) {
+      reasons.push("文件写入");
+    }
+    if (params.permissions?.network?.enabled === true) {
+      reasons.push("网络开启");
+    }
+  }
+
+  if (params.networkApprovalContext || params.proposedNetworkPolicyAmendments?.length > 0) {
+    reasons.push("网络访问");
+  }
+
+  if (params.reason) {
+    reasons.push("包含说明");
+  }
+
+  return unique(reasons);
+}
+
+function approvalDetails(method, params = {}, risk = approvalRisk(method, params), riskReasons = approvalRiskReasons(method, params)) {
   return [
-    riskDetail(approvalRisk(method, params)),
+    riskDetail(risk),
+    riskReasonDetail(riskReasons),
     projectDetail(params.cwd ?? params.grantRoot),
     commandActionDetail(params.commandActions ?? params.parsedCmd),
     fileChangeDetail(params.fileChanges),
@@ -303,6 +345,10 @@ function approvalDetails(method, params = {}) {
 
 function riskDetail(risk) {
   return `风险: ${risk}`;
+}
+
+function riskReasonDetail(reasons) {
+  return Array.isArray(reasons) && reasons.length > 0 ? `风险因素: ${reasons.join(" / ")}` : null;
 }
 
 function projectDetail(path) {
@@ -370,6 +416,14 @@ function fileChangeTypeLabel(type) {
     default:
       return "未知";
   }
+}
+
+function fileChangesIncludeDelete(fileChanges) {
+  if (!fileChanges || typeof fileChanges !== "object") {
+    return false;
+  }
+
+  return Object.values(fileChanges).some((change) => change?.type === "delete");
 }
 
 function permissionDetail(permissions) {

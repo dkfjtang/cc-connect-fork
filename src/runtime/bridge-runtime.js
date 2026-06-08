@@ -485,6 +485,7 @@ function approvalLogFields(approval) {
     approvalType: approval.type,
     approvalStatus: approval.status,
     approvalRisk: approval.risk,
+    approvalRiskReasons: approval.riskReasons,
     approvalId: approval.approvalId,
     approvalItemId: approval.itemId,
   };
