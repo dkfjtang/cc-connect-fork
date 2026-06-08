@@ -116,6 +116,17 @@ fca 可以高度复用 OpenClaw 类飞书插件的交互体验，但不应完全
 - fca 会绕过同 chat 队列，优先将当前 active task 标记为 cancelled。
 - 如当前 task 已有 `thread_id` 和 `turn_id`，fca 会调用 Codex app-server `turn/interrupt`。
 
+### 状态刷新
+
+含义：用户希望查看当前任务进度，但不应创建新的 Codex turn。
+
+触发：
+
+- 私聊内发送 `状态`、`查询状态`、`任务状态`、`/status`、`status` 或 `task status`。
+- 群聊内明确 @ Bot 并发送上述状态文本。
+- fca 会绕过同 chat 队列，优先刷新当前 active task 的同一张任务卡片。
+- 如果当前会话没有 active task，Bridge 只返回 skipped，不额外发送包含内部状态的文本消息。
+
 ## footer 信息规范
 
 footer 只展示排障有用、但不泄露敏感信息的字段。

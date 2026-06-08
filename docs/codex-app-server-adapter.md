@@ -227,6 +227,16 @@ failed
 3. 如果已取得 `thread_id` 和 `turn_id`，调用 app-server `turn/interrupt`。
 4. 让原 turn 流程收尾，并再次同步最终 cancelled 卡片。
 
+### active task 状态刷新
+
+当飞书用户在同一私聊发送 `状态`、`查询状态`、`任务状态`、`/status`、`status` 或 `task status` 时，Bridge 会：
+
+1. 查找当前 `chat_id` 的 active task。
+2. 绕过同 chat 队列，直接同步当前任务卡片。
+3. 返回当前 task status 供日志和事件处理器使用。
+
+该快路径不会发起新的 Codex turn，也不会发送额外文本消息；卡片仍沿用已有 footer 和脱敏摘要规则。
+
 ### turn 超时
 
 处理：

@@ -130,6 +130,7 @@ Done 标准：
 - 审批卡片已展示风险等级和脱敏范围摘要，包括目录别名、命令动作类型数量、文件变更数量和扩展名、权限读写数量、网络目标域名。
 - Thread Store 默认继续使用 JSON 文件，并已支持 `FCA_THREAD_STORE_DRIVER=sqlite` 的可选 SQLite 后端。
 - `npm run migrate:thread-store` 已提供 JSON thread store 到 SQLite 的 dry-run 和迁移能力。
+- 飞书 `状态` / `/status` 控制命令已走 active task 快路径，绕过同会话队列刷新当前任务卡片，不新建 Codex turn。
 
 ## M5 下一阶段评估
 
@@ -146,7 +147,6 @@ Done 标准：
 
 - 审批卡片详情确认页和更细风险分级。
 - CardKit 2.0 流式卡片，失败后回退 IM patch。
-- 取消/停止任务快路径。
 - 文件下载和回传。
 - 群级配置文件。
 - WebSocket 长驻部署模式。

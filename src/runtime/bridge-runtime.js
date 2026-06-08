@@ -194,6 +194,21 @@ export class BridgeRuntime {
     return { status: "cancelled", taskStatus: "cancelled" };
   }
 
+  async syncActiveTaskStatus({ chatId }) {
+    const activeTask = this.#activeTasks.get(chatId || "unknown");
+    if (!activeTask) {
+      return { status: "skipped", reason: "No active task for chat" };
+    }
+
+    await this.#cardController.sync(activeTask.task);
+    this.#logTask("info", "task.status_requested", activeTask.task);
+
+    return {
+      status: "handled",
+      taskStatus: activeTask.task.snapshot().status,
+    };
+  }
+
   async resolveApproval({ openId = null, decision, taskId = null, requestId = null, approvalId = null, itemId = null }) {
     if (!openId) {
       return { status: "skipped", reason: "Feishu operator open_id is required" };

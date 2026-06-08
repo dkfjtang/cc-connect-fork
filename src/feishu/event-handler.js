@@ -79,6 +79,16 @@ export class FeishuEventHandler {
       });
     }
 
+    if (isStatusText(message.text)) {
+      if (typeof this.#runtime.syncActiveTaskStatus !== "function") {
+        return { status: "skipped", reason: "Status refresh is not supported" };
+      }
+
+      return this.#runtime.syncActiveTaskStatus({
+        chatId: message.chatId,
+      });
+    }
+
     return this.#enqueue(message.chatId, async () => {
       const task = await this.#runtime.handleTextMessage(message);
       return {
@@ -184,6 +194,10 @@ export class FeishuEventHandler {
 
 function isCancelText(text) {
   return /^(取消|停止|终止|中止|stop|abort|cancel|cancel task|stop task)$/i.test(text.trim());
+}
+
+function isStatusText(text) {
+  return /^(状态|查询状态|任务状态|当前状态|\/status|status|task status)$/i.test(text.trim());
 }
 
 function mapGroupSenderOpenIds(policy) {

@@ -791,6 +791,68 @@ test("cancelActiveTask keeps Feishu cancellation when app-server interrupt fails
   assert.equal(task.snapshot().status, "cancelled");
 });
 
+test("syncActiveTaskStatus refreshes the active task card", async () => {
+  let emitEvent;
+  let markEventReady;
+  const eventReady = new Promise((resolve) => {
+    markEventReady = resolve;
+  });
+  const syncStatuses = [];
+  const logEntries = [];
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession({
+      onEvent: (handler) => {
+        emitEvent = handler;
+        markEventReady();
+        return () => {};
+      },
+      startTurnHook: () => {},
+    }),
+    cardController: {
+      sync: async (task) => {
+        syncStatuses.push(task.snapshot().status);
+        task.attachCard("om_123");
+      },
+    },
+    logger: fakeLogger(logEntries),
+  });
+
+  const pending = runtime.handleTextMessage({
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_123",
+    text: "hello",
+  });
+  await eventReady;
+  await Promise.resolve();
+
+  const result = await runtime.syncActiveTaskStatus({ chatId: "oc_123" });
+
+  assert.deepEqual(result, { status: "handled", taskStatus: "running" });
+  assert.deepEqual(syncStatuses, ["queued", "running"]);
+  assert.equal(logEntries.at(-1).event, "task.status_requested");
+  assert.equal(logEntries.at(-1).status, "running");
+
+  emitEvent({ method: "turn/completed", params: { status: "success" } });
+  await pending;
+});
+
+test("syncActiveTaskStatus skips when no active task exists", async () => {
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession(),
+    cardController: fakeCardController(),
+  });
+
+  assert.deepEqual(
+    await runtime.syncActiveTaskStatus({ chatId: "oc_missing" }),
+    { status: "skipped", reason: "No active task for chat" },
+  );
+});
+
 test("handleTextMessage returns failed task when streamed turn fails", async () => {
   let emitEvent;
   const runtime = new BridgeRuntime({

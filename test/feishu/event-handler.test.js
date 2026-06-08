@@ -311,6 +311,44 @@ test("handleMessageReceive uses cancel fast path without waiting for queued chat
   await first;
 });
 
+test("handleMessageReceive uses status fast path without waiting for queued chat work", async () => {
+  const calls = [];
+  let markFirstStarted;
+  const firstStarted = new Promise((resolve) => {
+    markFirstStarted = resolve;
+  });
+  let firstCanFinish;
+  const handler = new FeishuEventHandler({
+    runtime: {
+      handleTextMessage: async (message) => {
+        calls.push(`start:${message.messageId}`);
+        await new Promise((resolve) => {
+          firstCanFinish = resolve;
+          markFirstStarted();
+        });
+        calls.push(`finish:${message.messageId}`);
+        return { snapshot: () => ({ status: "completed" }) };
+      },
+      syncActiveTaskStatus: async ({ chatId }) => {
+        calls.push(`status:${chatId}`);
+        return { status: "handled", taskStatus: "running" };
+      },
+    },
+  });
+
+  const first = handler.handleMessageReceive(textPayload({ messageId: "om_1", chatId: "oc_123" }));
+  await firstStarted;
+  const status = await handler.handleMessageReceive(
+    textPayload({ messageId: "om_2", chatId: "oc_123", text: "/status" }),
+  );
+
+  assert.deepEqual(calls, ["start:om_1", "status:oc_123"]);
+  assert.deepEqual(status, { status: "handled", taskStatus: "running" });
+
+  firstCanFinish();
+  await first;
+});
+
 test("handleMessageReceive skips duplicate message ids", async () => {
   let calls = 0;
   const handler = new FeishuEventHandler({
