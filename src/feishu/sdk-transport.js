@@ -306,30 +306,66 @@ function toCardKitCard(card) {
     },
     header: card?.header,
     body: {
-      elements: (card?.elements ?? []).map(toCardKitElement).filter(Boolean),
+      elements: (card?.elements ?? [])
+        .map((element, index) => toCardKitElement(element, index))
+        .filter(Boolean),
     },
   };
 }
 
-function toCardKitElement(element) {
+function toCardKitElement(element, index) {
   if (!element || typeof element !== "object") {
     return null;
   }
   if (element.tag === "markdown" && element.text?.content) {
     return {
       tag: "markdown",
+      element_id: stableElementId(element, index),
       content: element.text.content,
+    };
+  }
+  if (element.tag === "action" && Array.isArray(element.actions)) {
+    return {
+      ...element,
+      element_id: stableElementId(element, index),
+      actions: element.actions.map((action, actionIndex) => ({
+        ...action,
+        element_id: action.element_id ?? `fca_action_${actionIndex}`,
+      })),
     };
   }
   if (element.tag === "note" && Array.isArray(element.elements)) {
     return {
       ...element,
+      element_id: stableElementId(element, index),
       elements: element.elements.map((item) =>
         item?.tag === "lark_md" ? { ...item, content: item.content ?? "" } : item,
       ),
     };
   }
-  return element;
+  return {
+    ...element,
+    element_id: stableElementId(element, index),
+  };
+}
+
+function stableElementId(element, index) {
+  if (element.element_id) {
+    return element.element_id;
+  }
+  if (element.tag === "markdown") {
+    return "fca_body";
+  }
+  if (element.tag === "action") {
+    return "fca_actions";
+  }
+  if (element.tag === "hr") {
+    return "fca_divider";
+  }
+  if (element.tag === "note") {
+    return "fca_footer";
+  }
+  return `fca_element_${index}`;
 }
 
 async function createDefaultClient({ appId, appSecret }) {

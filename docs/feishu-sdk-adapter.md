@@ -194,6 +194,18 @@ transport payload：
 
 如果 action 带有 `cardChannel=cardkit`、`cardId`，且 transport 提供 `updateCardKitCard`，会先尝试 CardKit update，并用 `cardSequence + 1` 作为下一次更新序号。CardKit send / update 方法缺失或失败时，会记录 `feishu.cardkit_fallback`，回退到 `sendMessage` / `patchMessageCard`；update 回退还会把 task 中保存的 `cardChannel` 降级为 `im`，避免后续继续依赖不可用的 CardKit 通道。
 
+## CardKit element id
+
+CardKit 转换层会为 legacy IM card 元素补稳定 `element_id`：
+
+- 正文 markdown：`fca_body`
+- 审批按钮区：`fca_actions`
+- 审批按钮：`fca_action_0`、`fca_action_1` 等
+- 分隔线：`fca_divider`
+- footer note：`fca_footer`
+
+已有 `element_id` 不会被覆盖。这些 id 用于后续接入局部更新或 element content 流式更新。
+
 ## 后续接入点
 
 - 继续评估 CardKit 局部更新和流式 element content 更新。

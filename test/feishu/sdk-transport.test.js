@@ -111,6 +111,21 @@ test("sendCardKitMessage creates CardKit card and sends card instance message", 
           tag: "markdown",
           text: { tag: "lark_md", content: "Codex 正在处理..." },
         },
+        {
+          tag: "action",
+          actions: [
+            {
+              tag: "button",
+              text: { tag: "plain_text", content: "停止" },
+              value: { fcaAction: "approval.resolve", decision: "cancel" },
+            },
+          ],
+        },
+        { tag: "hr" },
+        {
+          tag: "note",
+          elements: [{ tag: "lark_md", content: "状态: queued" }],
+        },
       ],
     },
   });
@@ -125,7 +140,29 @@ test("sendCardKitMessage creates CardKit card and sends card instance message", 
       elements: [
         {
           tag: "markdown",
+          element_id: "fca_body",
           content: "Codex 正在处理...",
+        },
+        {
+          tag: "action",
+          element_id: "fca_actions",
+          actions: [
+            {
+              tag: "button",
+              element_id: "fca_action_0",
+              text: { tag: "plain_text", content: "停止" },
+              value: { fcaAction: "approval.resolve", decision: "cancel" },
+            },
+          ],
+        },
+        {
+          tag: "hr",
+          element_id: "fca_divider",
+        },
+        {
+          tag: "note",
+          element_id: "fca_footer",
+          elements: [{ tag: "lark_md", content: "状态: queued" }],
         },
       ],
     },
@@ -199,6 +236,50 @@ test("updateCardKitCard calls Feishu SDK CardKit full update with next sequence"
     },
   ]);
   assert.deepEqual(result, { data: { sequence: 4 } });
+});
+
+test("sendCardKitMessage preserves existing CardKit element ids", async () => {
+  const calls = [];
+  const transport = new FeishuSdkTransport({
+    appId: "cli_123",
+    appSecret: "secret",
+    createClient: () => ({
+      cardkit: {
+        v1: {
+          card: {
+            create: async (payload) => {
+              calls.push({ method: "cardkit.card.create", payload });
+              return { data: { card_id: "card_123" } };
+            },
+          },
+        },
+      },
+      im: {
+        message: {
+          create: async () => ({ data: { message_id: "om_123" } }),
+        },
+      },
+    }),
+  });
+
+  await transport.sendCardKitMessage({
+    receiveIdType: "chat_id",
+    receiveId: "oc_123",
+    card: {
+      schema: "2.0",
+      body: {
+        elements: [
+          {
+            tag: "markdown",
+            element_id: "custom_body",
+            content: "existing cardkit content",
+          },
+        ],
+      },
+    },
+  });
+
+  assert.equal(JSON.parse(calls[0].payload.data.data).body.elements[0].element_id, "custom_body");
 });
 
 test("probeBot returns bot open id and name from Feishu ping API", async () => {
