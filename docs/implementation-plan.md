@@ -144,6 +144,7 @@ Done 标准：
 - 飞书 `状态` / `/status` 控制命令已走 active task 快路径，绕过同会话队列刷新当前任务卡片，不新建 Codex turn。
 - 飞书 `/cwd` / `cwd` 控制命令已先接入安全占位：不启动 Codex turn、不切换目录、不回显用户输入路径，只返回固定暂不支持提示；后续真实切换必须接 `FCA_ALLOWED_WORKDIRS` 白名单。
 - 飞书 `/clear` / `clear` / `清理会话` / `重置会话` 控制命令已先接入安全占位：不启动 Codex turn、不删除 thread store、不回显用户输入参数，只返回固定暂不支持提示；后续真实清理必须加入确认、审计和会话范围校验。
+- 飞书 `/permission` / `permission` / `权限` 控制命令已先接入安全占位：不启动 Codex turn、不修改 sandbox / approval policy / 工作目录白名单、不回显用户输入参数，只返回固定暂不支持提示；后续真实修改必须加入确认、审计和最小权限校验。
 
 ## M5 下一阶段评估
 

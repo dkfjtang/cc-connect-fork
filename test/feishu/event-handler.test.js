@@ -584,6 +584,43 @@ test("handleMessageReceive replies clear unsupported notice without starting a t
   assert.equal(JSON.stringify(notices).includes("all"), false);
 });
 
+test("handleMessageReceive replies permission unsupported notice without starting a turn", async () => {
+  const notices = [];
+  const handler = new FeishuEventHandler({
+    runtime: {
+      handleTextMessage: async () => {
+        throw new Error("should not start Codex turn for permission command");
+      },
+    },
+    unsupportedMessageClient: {
+      sendTextMessage: async (message) => {
+        notices.push(message);
+      },
+    },
+  });
+
+  const result = await handler.handleMessageReceive(
+    textPayload({
+      messageId: "om_permission",
+      chatId: "oc_123",
+      text: "/permission full-access F:\\development\\secret-project",
+    }),
+  );
+
+  assert.deepEqual(result, {
+    status: "handled",
+    reason: "Permission command is not supported",
+  });
+  assert.deepEqual(notices, [
+    {
+      chatId: "oc_123",
+      text: "暂不支持在飞书内修改 Codex 权限策略。当前版本仍使用本地已配置的权限边界；后续开放 /permission 时会先加入确认、审计和最小权限校验。",
+    },
+  ]);
+  assert.equal(JSON.stringify(notices).includes("secret-project"), false);
+  assert.equal(JSON.stringify(notices).includes("full-access"), false);
+});
+
 test("handleMessageReceive skips duplicate message ids", async () => {
   let calls = 0;
   const handler = new FeishuEventHandler({

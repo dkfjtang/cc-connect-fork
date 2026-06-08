@@ -117,6 +117,10 @@ export class FeishuEventHandler {
       return this.#handleUnsupportedClearCommand(message.chatId);
     }
 
+    if (isPermissionText(message.text)) {
+      return this.#handleUnsupportedPermissionCommand(message.chatId);
+    }
+
     return this.#enqueue(message.chatId, async () => {
       const task = await this.#runtime.handleTextMessage(message);
       return {
@@ -218,6 +222,19 @@ export class FeishuEventHandler {
     });
 
     return { status: "handled", reason: "Clear command is not supported" };
+  }
+
+  async #handleUnsupportedPermissionCommand(chatId) {
+    if (!this.#unsupportedMessageClient?.sendTextMessage) {
+      return { status: "skipped", reason: "Permission command is not supported" };
+    }
+
+    await this.#unsupportedMessageClient.sendTextMessage({
+      chatId,
+      text: "暂不支持在飞书内修改 Codex 权限策略。当前版本仍使用本地已配置的权限边界；后续开放 /permission 时会先加入确认、审计和最小权限校验。",
+    });
+
+    return { status: "handled", reason: "Permission command is not supported" };
   }
 
   #precheck(payload) {
@@ -332,6 +349,10 @@ function isCwdText(text) {
 
 function isClearText(text) {
   return /^(\/clear|clear|清理会话|重置会话)(\s+.*)?$/i.test(text.trim());
+}
+
+function isPermissionText(text) {
+  return /^(\/permission|permission|权限)(\s+.*)?$/i.test(text.trim());
 }
 
 function mapGroupSenderOpenIds(policy) {
