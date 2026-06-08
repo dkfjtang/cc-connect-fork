@@ -99,3 +99,17 @@ test("notifications are forwarded to the session event handler", () => {
     { method: "item/agentMessage/delta", params: { delta: "hello" } },
   ]);
 });
+
+test("onEvent subscribes additional notification handlers", () => {
+  const events = [];
+  const session = new AppServerSession({
+    write: () => {},
+  });
+
+  const unsubscribe = session.onEvent((event) => events.push(event));
+  session.handleMessage({ method: "turn/started", params: {} });
+  unsubscribe();
+  session.handleMessage({ method: "turn/completed", params: {} });
+
+  assert.deepEqual(events, [{ method: "turn/started", params: {} }]);
+});

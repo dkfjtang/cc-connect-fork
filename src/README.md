@@ -14,7 +14,7 @@
 
 - `codex/json-rpc-client.js`：JSON-RPC 请求、响应和 notification 分发。
 - `codex/json-line-channel.js`：app-server stdio JSONL 读写和分片重组。
-- `codex/app-server-session.js`：Codex app-server initialize、thread/start 和 turn/start 封装。
+- `codex/app-server-session.js`：Codex app-server initialize、thread/start、turn/start 和 notification 订阅封装。
 - `codex/app-server-process.js`：本地 `codex app-server` 子进程启动和 stdio session 绑定。
 - `codex/turn-output-buffer.js`：Codex delta 输出聚合和卡片摘要截断。
 - `cli/smoke-codex-turn.js`：不依赖飞书的 Codex app-server smoke turn 入口。
@@ -24,5 +24,5 @@
 - `feishu/task-card-controller.js`：根据 task 状态同步发送或更新飞书任务卡片。
 - `policy/access-policy.js`：飞书 `open_id` 和本地工作目录白名单校验。
 - `runtime/runtime-task.js`：Codex notification 到 fca task 状态的最小转换。
-- `runtime/bridge-runtime.js`：私聊文本消息到 policy、thread store、Codex session 和任务卡片的最小编排。
+- `runtime/bridge-runtime.js`：私聊文本消息到 policy、thread store、Codex session、streamed events 和任务卡片的最小编排。
 - `store/thread-store.js`：飞书用户和工作目录到 Codex thread 的内存/JSON 文件映射。

@@ -6,11 +6,12 @@ export class BridgeRuntime {
   #session;
   #cardController;
 
-  constructor({ policy, threadStore, session, cardController }) {
+  constructor({ policy, threadStore, session, cardController, turnTimeoutMs = 900_000 }) {
     this.#policy = policy;
     this.#threadStore = threadStore;
     this.#session = session;
     this.#cardController = cardController;
+    this.turnTimeoutMs = turnTimeoutMs;
   }
 
   async handleTextMessage({ messageId, openId, chatId, text }) {
@@ -44,6 +45,7 @@ export class BridgeRuntime {
       task.attachThread(threadId);
     }
 
+    const turnCompleted = this.#waitForTurnCompletion(task);
     const turnResult = await this.#session.startTurn({ threadId, text, cwd });
     if (turnResult.turn?.id) {
       task.handleCodexEvent({
@@ -52,10 +54,7 @@ export class BridgeRuntime {
       });
     }
 
-    task.handleCodexEvent({
-      method: "turn/completed",
-      params: { status: "success" },
-    });
+    await turnCompleted;
 
     await this.#threadStore.saveThread({
       openId,
@@ -66,5 +65,28 @@ export class BridgeRuntime {
     await this.#cardController.sync(task);
 
     return task;
+  }
+
+  #waitForTurnCompletion(task) {
+    let unsubscribe = () => {};
+    let timeoutId;
+
+    const completed = new Promise((resolve, reject) => {
+      unsubscribe = this.#session.onEvent((event) => {
+        task.handleCodexEvent(event);
+        if (event.method === "turn/completed") {
+          resolve();
+        }
+      });
+
+      timeoutId = setTimeout(() => {
+        reject(new Error("Timed out waiting for Codex turn completion"));
+      }, this.turnTimeoutMs);
+    });
+
+    return completed.finally(() => {
+      clearTimeout(timeoutId);
+      unsubscribe();
+    });
   }
 }

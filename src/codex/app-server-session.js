@@ -9,12 +9,14 @@ const DEFAULT_CLIENT_INFO = {
 export class AppServerSession {
   #client;
   #clientInfo;
+  #eventHandlers = new Set();
 
   constructor({ write, onEvent = () => {}, clientInfo = DEFAULT_CLIENT_INFO }) {
     this.#clientInfo = clientInfo;
+    this.#eventHandlers.add(onEvent);
     this.#client = new JsonRpcClient({
       write,
-      onNotification: onEvent,
+      onNotification: (event) => this.#emitEvent(event),
     });
   }
 
@@ -50,5 +52,18 @@ export class AppServerSession {
 
   handleMessage(message) {
     this.#client.handleMessage(message);
+  }
+
+  onEvent(handler) {
+    this.#eventHandlers.add(handler);
+    return () => {
+      this.#eventHandlers.delete(handler);
+    };
+  }
+
+  #emitEvent(event) {
+    for (const handler of this.#eventHandlers) {
+      handler(event);
+    }
   }
 }

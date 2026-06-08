@@ -97,10 +97,28 @@ test("handleTextMessage creates and stores a thread when mapping is missing", as
 
 test("handleTextMessage syncs task card before and after turn", async () => {
   const syncStatuses = [];
+  let emitEvent;
   const runtime = new BridgeRuntime({
     policy: allowDefaultPolicy(),
     threadStore: new MemoryThreadStore({ now: () => "test-now" }),
-    session: fakeSession(),
+    session: fakeSession({
+      onEvent: (handler) => {
+        emitEvent = handler;
+        return () => {};
+      },
+      startTurnHook: () => {
+        queueMicrotask(() => {
+          emitEvent({
+            method: "item/agentMessage/delta",
+            params: { delta: "done" },
+          });
+          emitEvent({
+            method: "turn/completed",
+            params: { status: "success" },
+          });
+        });
+      },
+    }),
     cardController: {
       sync: async (task) => {
         syncStatuses.push(task.snapshot().status);
@@ -119,6 +137,39 @@ test("handleTextMessage syncs task card before and after turn", async () => {
   assert.deepEqual(syncStatuses, ["queued", "completed"]);
 });
 
+test("handleTextMessage returns failed task when streamed turn fails", async () => {
+  let emitEvent;
+  const runtime = new BridgeRuntime({
+    policy: allowDefaultPolicy(),
+    threadStore: new MemoryThreadStore({ now: () => "test-now" }),
+    session: fakeSession({
+      onEvent: (handler) => {
+        emitEvent = handler;
+        return () => {};
+      },
+      startTurnHook: () => {
+        queueMicrotask(() => {
+          emitEvent({
+            method: "turn/completed",
+            params: { status: "failed", error: { message: "denied" } },
+          });
+        });
+      },
+    }),
+    cardController: fakeCardController(),
+  });
+
+  const task = await runtime.handleTextMessage({
+    messageId: "msg_123",
+    openId: "ou_allowed",
+    chatId: "oc_123",
+    text: "hello",
+  });
+
+  assert.equal(task.snapshot().status, "failed");
+  assert.equal(task.snapshot().errorSummary, "denied");
+});
+
 function allowDefaultPolicy() {
   return new AccessPolicy({
     allowedOpenIds: ["ou_allowed"],
@@ -127,14 +178,29 @@ function allowDefaultPolicy() {
   });
 }
 
-function fakeSession({ calls = [] } = {}) {
+function fakeSession({ calls = [], onEvent, startTurnHook } = {}) {
+  let eventHandler = () => {};
   return {
+    onEvent: (handler) => {
+      eventHandler = handler;
+      return onEvent ? onEvent(handler) : () => {};
+    },
     startThread: async () => {
       calls.push({ method: "startThread" });
       return { thread: { id: "thr_new" } };
     },
     startTurn: async ({ threadId, text, cwd }) => {
       calls.push({ method: "startTurn", threadId, text, cwd });
+      if (startTurnHook) {
+        startTurnHook();
+      } else {
+        queueMicrotask(() => {
+          eventHandler({
+            method: "turn/completed",
+            params: { status: "success" },
+          });
+        });
+      }
       return { turn: { id: "turn_new" } };
     },
   };

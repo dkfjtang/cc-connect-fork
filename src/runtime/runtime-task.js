@@ -41,7 +41,9 @@ export class RuntimeTask {
     switch (event.method) {
       case "turn/started":
         this.#turnId = event.params?.turn?.id ?? this.#turnId;
-        this.#status = "running";
+        if (this.#status === "queued") {
+          this.#status = "running";
+        }
         break;
       case "item/agentMessage/delta":
         this.#output.appendDelta(event.params?.delta);
