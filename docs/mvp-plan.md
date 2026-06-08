@@ -124,6 +124,6 @@ Bridge 侧需要封装一个 Codex client，负责：
 ## 待确认事项
 
 - Bridge 实现语言：Node.js 更贴近 app-server quickstart 和飞书 SDK 生态；Python 更利于后续脚本化和本机运维。
-- thread 映射存储：第一阶段可用本地 JSON 或 SQLite，长期建议 SQLite。
+- thread 映射存储：默认本地 JSON；已提供可选 SQLite 后端，长期部署建议使用 SQLite。
 - 运行目录策略：是否只允许 `F:\development` 下白名单项目。
 - 飞书消息更新策略：第一阶段采用任务卡片，并至少支持 running / completed / failed 三态更新。

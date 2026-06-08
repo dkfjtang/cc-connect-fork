@@ -3,7 +3,7 @@ import { BridgeRuntime } from "../runtime/bridge-runtime.js";
 import { CodexAppServerProcess } from "../codex/app-server-process.js";
 import { FeishuEventHandler } from "../feishu/event-handler.js";
 import { FeishuMessageClient } from "../feishu/message-client.js";
-import { FileThreadStore } from "../store/thread-store.js";
+import { FileThreadStore, SqliteThreadStore } from "../store/thread-store.js";
 import { FileMessageDedupStore } from "../store/message-dedup-store.js";
 import { TaskCardController } from "../feishu/task-card-controller.js";
 import { loadConfig } from "../config/app-config.js";
@@ -14,8 +14,7 @@ export function createBridgeApp({
   codexAppServerFactory = (options) => new CodexAppServerProcess(options),
   feishuTransport,
   logger = null,
-  threadStoreFactory = (config) =>
-    new FileThreadStore({ filePath: config.threadStorePath }),
+  threadStoreFactory = createThreadStore,
   messageDedupStoreFactory = (config) =>
     new FileMessageDedupStore({
       filePath: config.messageDedupStorePath,
@@ -73,4 +72,12 @@ export function createBridgeApp({
       return eventHandler;
     },
   };
+}
+
+export function createThreadStore(config) {
+  if (config.threadStoreDriver === "sqlite") {
+    return new SqliteThreadStore({ filePath: config.threadStorePath });
+  }
+
+  return new FileThreadStore({ filePath: config.threadStorePath });
 }

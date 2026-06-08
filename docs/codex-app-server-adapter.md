@@ -274,7 +274,7 @@ Codex approval event
 
 ## 开放问题
 
-- thread mapping 长期是否迁移到 SQLite。
+- 是否需要提供 JSON 到 SQLite 的一键迁移脚本。
 - 是否每个用户共享一个 app-server 连接，还是每个任务独立连接。
 - approval event 的确切方法名需要以后续 schema 生成为准。
 - 是否需要在 turn 参数里显式传入 sandbox 和 approval policy。

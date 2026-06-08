@@ -9,6 +9,7 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
     FCA_ALLOWED_GROUP_CHAT_IDS: "oc_1, oc_2",
     FCA_GROUP_SENDER_OPEN_IDS: "oc_1=ou_1,ou_2; oc_2=ou_2",
     FCA_GROUP_DEVELOPER_INSTRUCTIONS: "oc_1=只处理 A 项目; oc_2=只处理 B 项目",
+    FCA_THREAD_STORE_DRIVER: "sqlite",
     FCA_ALLOWED_WORKDIRS: "F:\\development\\f-codex;F:\\development\\IDSS",
     FCA_DEFAULT_WORKDIR: "F:\\development\\f-codex",
     FEISHU_APP_ID: "cli_123",
@@ -35,6 +36,7 @@ test("loadConfig parses comma separated open ids and semicolon separated workdir
     "F:\\development\\f-codex",
     "F:\\development\\IDSS",
   ]);
+  assert.equal(config.threadStoreDriver, "sqlite");
   assert.equal(config.feishuAppId, "cli_123");
   assert.equal(config.defaultWorkdir, "F:\\development\\f-codex");
   assert.equal(config.codexBin, "codex");
@@ -53,6 +55,7 @@ test("loadConfig uses safe local defaults when optional values are missing", () 
   assert.deepEqual(config.allowedGroupChatIds, []);
   assert.deepEqual(config.groupSenderOpenIds, {});
   assert.deepEqual(config.groupDeveloperInstructions, {});
+  assert.equal(config.threadStoreDriver, "json");
   assert.deepEqual(config.allowedWorkdirs, []);
   assert.equal(config.defaultWorkdir, null);
   assert.equal(config.feishuAppId, null);
@@ -65,6 +68,13 @@ test("loadConfig uses safe local defaults when optional values are missing", () 
   assert.equal(config.messageDedupStorePath, "data/message-dedup.json");
   assert.equal(config.messageDedupTtlSeconds, 86400);
   assert.equal(config.turnTimeoutSeconds, 900);
+});
+
+test("loadConfig uses sqlite default thread store path when sqlite driver is selected", () => {
+  const config = loadConfig({ FCA_THREAD_STORE_DRIVER: "sqlite" });
+
+  assert.equal(config.threadStoreDriver, "sqlite");
+  assert.equal(config.threadStorePath, "data/threads.sqlite");
 });
 
 test("loadConfig rejects non-positive turn timeout", () => {
@@ -92,5 +102,12 @@ test("loadConfig rejects malformed group developer instructions", () => {
   assert.throws(
     () => loadConfig({ FCA_GROUP_DEVELOPER_INSTRUCTIONS: "oc_1" }),
     /FCA_GROUP_DEVELOPER_INSTRUCTIONS entries must use chat_id=instructions/,
+  );
+});
+
+test("loadConfig rejects unsupported thread store driver", () => {
+  assert.throws(
+    () => loadConfig({ FCA_THREAD_STORE_DRIVER: "mysql" }),
+    /FCA_THREAD_STORE_DRIVER must be json or sqlite/,
   );
 });

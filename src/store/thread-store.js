@@ -89,6 +89,116 @@ export class FileThreadStore extends MemoryThreadStore {
   }
 }
 
+export class SqliteThreadStore {
+  #filePath;
+  #now;
+  #db = null;
+
+  constructor({ filePath, now = () => new Date().toISOString() }) {
+    this.#filePath = filePath;
+    this.#now = now;
+  }
+
+  async getThread(query) {
+    const db = await this.#open();
+    const row = db
+      .prepare(
+        `SELECT open_id, chat_id, chat_type, conversation_id, cwd, thread_id, last_turn_id, last_seen_at
+         FROM thread_mappings
+         WHERE conversation_key = ? AND cwd = ?`,
+      )
+      .get(mappingConversationKey(query), query.cwd);
+
+    return row ? rowToRecord(row) : null;
+  }
+
+  async saveThread({
+    openId,
+    chatId = null,
+    chatType = null,
+    conversationId = null,
+    cwd,
+    threadId,
+    lastTurnId = null,
+  }) {
+    const db = await this.#open();
+    const record = {
+      openId,
+      ...(chatId ? { chatId } : {}),
+      ...(chatType ? { chatType } : {}),
+      ...(conversationId ? { conversationId } : {}),
+      cwd,
+      threadId,
+      lastTurnId,
+      lastSeenAt: this.#now(),
+    };
+
+    db.prepare(
+      `INSERT INTO thread_mappings (
+         conversation_key,
+         open_id,
+         chat_id,
+         chat_type,
+         conversation_id,
+         cwd,
+         thread_id,
+         last_turn_id,
+         last_seen_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(conversation_key, cwd) DO UPDATE SET
+         open_id = excluded.open_id,
+         chat_id = excluded.chat_id,
+         chat_type = excluded.chat_type,
+         conversation_id = excluded.conversation_id,
+         thread_id = excluded.thread_id,
+         last_turn_id = excluded.last_turn_id,
+         last_seen_at = excluded.last_seen_at`,
+    ).run(
+      mappingConversationKey(record),
+      openId,
+      chatId,
+      chatType,
+      conversationId,
+      cwd,
+      threadId,
+      lastTurnId,
+      record.lastSeenAt,
+    );
+
+    return record;
+  }
+
+  close() {
+    this.#db?.close();
+    this.#db = null;
+  }
+
+  async #open() {
+    if (this.#db) {
+      return this.#db;
+    }
+
+    await mkdir(dirname(this.#filePath), { recursive: true });
+    const { DatabaseSync } = await import("node:sqlite");
+    this.#db = new DatabaseSync(this.#filePath);
+    this.#db.exec(`
+      CREATE TABLE IF NOT EXISTS thread_mappings (
+        conversation_key TEXT NOT NULL,
+        open_id TEXT NOT NULL,
+        chat_id TEXT,
+        chat_type TEXT,
+        conversation_id TEXT,
+        cwd TEXT NOT NULL,
+        thread_id TEXT NOT NULL,
+        last_turn_id TEXT,
+        last_seen_at TEXT NOT NULL,
+        PRIMARY KEY (conversation_key, cwd)
+      )
+    `);
+    return this.#db;
+  }
+}
+
 async function readStoreFile(filePath) {
   try {
     return JSON.parse(await readFile(filePath, "utf8"));
@@ -100,6 +210,32 @@ async function readStoreFile(filePath) {
   }
 }
 
-function mappingKey({ conversationId = null, openId, cwd }) {
-  return `${conversationId ?? openId}\u0000${cwd}`;
+function mappingKey({ cwd, ...rest }) {
+  return `${mappingConversationKey(rest)}\u0000${cwd}`;
+}
+
+function mappingConversationKey({ conversationId = null, openId }) {
+  return conversationId ?? openId;
+}
+
+function rowToRecord(row) {
+  const record = {
+    openId: row.open_id,
+    cwd: row.cwd,
+    threadId: row.thread_id,
+    lastTurnId: row.last_turn_id,
+    lastSeenAt: row.last_seen_at,
+  };
+
+  if (row.chat_id) {
+    record.chatId = row.chat_id;
+  }
+  if (row.chat_type) {
+    record.chatType = row.chat_type;
+  }
+  if (row.conversation_id) {
+    record.conversationId = row.conversation_id;
+  }
+
+  return record;
 }

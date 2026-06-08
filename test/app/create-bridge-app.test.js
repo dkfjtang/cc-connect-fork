@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { createBridgeApp } from "../../src/app/create-bridge-app.js";
+import { createBridgeApp, createThreadStore } from "../../src/app/create-bridge-app.js";
+import { FileThreadStore, SqliteThreadStore } from "../../src/store/thread-store.js";
 
 test("createBridgeApp wires config, policy, store, runtime, and handler", async () => {
   const cardActions = [];
@@ -86,6 +87,21 @@ test("createBridgeApp exposes config for diagnostics", () => {
 
   assert.equal(app.config.defaultWorkdir, "F:\\development\\f-codex");
   assert.deepEqual(app.config.allowedOpenIds, ["ou_123"]);
+});
+
+test("createThreadStore selects configured thread store driver", () => {
+  assert.ok(
+    createThreadStore({
+      threadStoreDriver: "json",
+      threadStorePath: "data/threads.json",
+    }) instanceof FileThreadStore,
+  );
+  assert.ok(
+    createThreadStore({
+      threadStoreDriver: "sqlite",
+      threadStorePath: "data/threads.sqlite",
+    }) instanceof SqliteThreadStore,
+  );
 });
 
 test("createBridgeApp passes bot open id to event handler self-echo guard", async () => {

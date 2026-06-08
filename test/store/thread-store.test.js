@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
 
-import { FileThreadStore, MemoryThreadStore } from "../../src/store/thread-store.js";
+import { FileThreadStore, MemoryThreadStore, SqliteThreadStore } from "../../src/store/thread-store.js";
 
 test("MemoryThreadStore returns null when mapping is missing", async () => {
   const store = new MemoryThreadStore();
@@ -158,6 +158,87 @@ test("FileThreadStore persists mappings to JSON file", async () => {
 
     const raw = JSON.parse(await readFile(filePath, "utf8"));
     assert.equal(raw.version, 1);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("SqliteThreadStore persists mappings by conversation and cwd", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "fca-thread-store-sqlite-"));
+  const filePath = join(dir, "threads.sqlite");
+
+  try {
+    const store = new SqliteThreadStore({ filePath, now: () => "test-now" });
+    await store.saveThread({
+      openId: "ou_1",
+      chatId: "oc_group",
+      chatType: "group",
+      conversationId: "oc_group",
+      cwd: "F:\\development\\f-codex",
+      threadId: "thr_group",
+      lastTurnId: "turn_1",
+    });
+    store.close();
+
+    const loaded = new SqliteThreadStore({ filePath, now: () => "unused" });
+    assert.deepEqual(
+      await loaded.getThread({
+        conversationId: "oc_group",
+        cwd: "F:\\development\\f-codex",
+      }),
+      {
+        openId: "ou_1",
+        chatId: "oc_group",
+        chatType: "group",
+        conversationId: "oc_group",
+        cwd: "F:\\development\\f-codex",
+        threadId: "thr_group",
+        lastTurnId: "turn_1",
+        lastSeenAt: "test-now",
+      },
+    );
+    assert.equal(
+      await loaded.getThread({
+        openId: "ou_1",
+        cwd: "F:\\development\\f-codex",
+      }),
+      null,
+    );
+    loaded.close();
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("SqliteThreadStore updates an existing mapping", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "fca-thread-store-sqlite-"));
+  const filePath = join(dir, "threads.sqlite");
+
+  try {
+    const store = new SqliteThreadStore({ filePath, now: () => "test-now" });
+    await store.saveThread({
+      openId: "ou_1",
+      cwd: "F:\\development\\f-codex",
+      threadId: "thr_old",
+    });
+    await store.saveThread({
+      openId: "ou_1",
+      cwd: "F:\\development\\f-codex",
+      threadId: "thr_new",
+      lastTurnId: "turn_new",
+    });
+
+    assert.deepEqual(
+      await store.getThread({ openId: "ou_1", cwd: "F:\\development\\f-codex" }),
+      {
+        openId: "ou_1",
+        cwd: "F:\\development\\f-codex",
+        threadId: "thr_new",
+        lastTurnId: "turn_new",
+        lastSeenAt: "test-now",
+      },
+    );
+    store.close();
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

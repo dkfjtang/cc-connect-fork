@@ -40,8 +40,8 @@ fca 是飞书到本地 Codex 的桥接服务。它不替代 Codex，也不把本
 ### Thread Store
 
 - 维护飞书私聊用户、群聊会话和 Codex thread 的映射。
-- 第一阶段可使用本地 JSON 或 SQLite。
-- 长期建议 SQLite，便于状态查询、恢复和迁移。
+- 默认使用本地 JSON 文件，便于最小部署。
+- 可通过 `FCA_THREAD_STORE_DRIVER=sqlite` 切换到 SQLite，便于长期会话恢复、状态查询和后续迁移。
 
 ### Codex AppServer Client
 

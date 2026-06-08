@@ -43,6 +43,7 @@ export function checkConfig(env = process.env) {
       defaultWorkdir: config.defaultWorkdir,
       messageDedupStorePath: config.messageDedupStorePath,
       messageDedupTtlSeconds: config.messageDedupTtlSeconds,
+      threadStoreDriver: config.threadStoreDriver,
       threadStorePath: config.threadStorePath,
       turnTimeoutSeconds: config.turnTimeoutSeconds,
     },
@@ -80,6 +81,7 @@ export async function runCheckConfig({
   output.write(`codexBin: ${result.summary.codexBin}\n`);
   output.write(`codexModel: ${result.summary.codexModel ?? "default"}\n`);
   output.write(`appVersion: ${result.summary.appVersion}\n`);
+  output.write(`threadStoreDriver: ${result.summary.threadStoreDriver}\n`);
   output.write(`threadStorePath: ${result.summary.threadStorePath}\n`);
   output.write(`messageDedupStorePath: ${result.summary.messageDedupStorePath}\n`);
   output.write(`messageDedupTtlSeconds: ${result.summary.messageDedupTtlSeconds}\n`);

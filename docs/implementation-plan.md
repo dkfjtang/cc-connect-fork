@@ -123,6 +123,7 @@ Done 标准：
 - `FeishuEventHandler` 已通过 JSON 文件 message dedup store 持久化 `message_id` 去重窗口，降低重连或进程重启回放导致的重复执行风险。
 - `RuntimeTask` 和任务卡片 footer 已补充 `elapsedMs`、运行时长展示和 `errorType`，便于按卡片直接判断耗时和失败类别。
 - `FCA_CODEX_MODEL` 已贯穿到 Codex `thread/start`、任务 snapshot 和卡片 footer；`FCA_VERSION` 已进入配置检查和 footer。
+- Thread Store 默认继续使用 JSON 文件，并已支持 `FCA_THREAD_STORE_DRIVER=sqlite` 的可选 SQLite 后端。
 
 ## M5 下一阶段评估
 
@@ -141,7 +142,6 @@ Done 标准：
 - CardKit 2.0 流式卡片，失败后回退 IM patch。
 - 取消/停止任务快路径。
 - 运行中进度消息。
-- SQLite thread store。
 - 文件下载和回传。
 - 群级配置文件。
 - WebSocket 长驻部署模式。

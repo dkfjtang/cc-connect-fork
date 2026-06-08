@@ -4,6 +4,8 @@ const DEFAULT_LOG_LEVEL = "info";
 const DEFAULT_TURN_TIMEOUT_SECONDS = 900;
 const DEFAULT_MESSAGE_DEDUP_TTL_SECONDS = 86400;
 const DEFAULT_THREAD_STORE_PATH = "data/threads.json";
+const DEFAULT_SQLITE_THREAD_STORE_PATH = "data/threads.sqlite";
+const DEFAULT_THREAD_STORE_DRIVER = "json";
 const DEFAULT_MESSAGE_DEDUP_STORE_PATH = "data/message-dedup.json";
 const DEFAULT_APP_VERSION = "0.1.0";
 
@@ -19,6 +21,7 @@ export function loadConfig(env = process.env) {
     DEFAULT_MESSAGE_DEDUP_TTL_SECONDS,
     "FCA_MESSAGE_DEDUP_TTL_SECONDS",
   );
+  const threadStoreDriver = parseThreadStoreDriver(env.FCA_THREAD_STORE_DRIVER);
 
   return {
     feishuAppId: env.FEISHU_APP_ID?.trim() || null,
@@ -35,12 +38,27 @@ export function loadConfig(env = process.env) {
     codexModel: env.FCA_CODEX_MODEL?.trim() || null,
     appVersion: env.FCA_VERSION?.trim() || DEFAULT_APP_VERSION,
     logLevel: env.FCA_LOG_LEVEL?.trim() || DEFAULT_LOG_LEVEL,
-    threadStorePath: env.FCA_THREAD_STORE_PATH?.trim() || DEFAULT_THREAD_STORE_PATH,
+    threadStoreDriver,
+    threadStorePath:
+      env.FCA_THREAD_STORE_PATH?.trim() || defaultThreadStorePath(threadStoreDriver),
     messageDedupStorePath:
       env.FCA_MESSAGE_DEDUP_STORE_PATH?.trim() || DEFAULT_MESSAGE_DEDUP_STORE_PATH,
     messageDedupTtlSeconds,
     turnTimeoutSeconds,
   };
+}
+
+function defaultThreadStorePath(driver) {
+  return driver === "sqlite" ? DEFAULT_SQLITE_THREAD_STORE_PATH : DEFAULT_THREAD_STORE_PATH;
+}
+
+function parseThreadStoreDriver(value) {
+  const driver = value?.trim() || DEFAULT_THREAD_STORE_DRIVER;
+  if (!["json", "sqlite"].includes(driver)) {
+    throw new Error("FCA_THREAD_STORE_DRIVER must be json or sqlite");
+  }
+
+  return driver;
 }
 
 function splitList(value, separator) {
