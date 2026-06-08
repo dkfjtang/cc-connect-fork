@@ -13,6 +13,7 @@
 当前已落地：
 
 - `codex/json-rpc-client.js`：JSON-RPC 请求、响应和 notification 分发。
+- `codex/json-line-channel.js`：app-server stdio JSONL 读写和分片重组。
 - `codex/app-server-session.js`：Codex app-server initialize、thread/start 和 turn/start 封装。
 - `codex/turn-output-buffer.js`：Codex delta 输出聚合和卡片摘要截断。
 - `config/app-config.js`：从环境变量解析 fca 本地配置，不读取真实凭据文件。
