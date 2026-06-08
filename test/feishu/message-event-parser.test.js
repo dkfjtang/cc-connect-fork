@@ -26,25 +26,58 @@ test("parseMessageReceiveEvent extracts private text message context", () => {
     messageId: "om_123",
     openId: "ou_123",
     chatId: "oc_123",
+    chatType: "p2p",
     text: "帮我看项目状态",
   });
 });
 
-test("parseMessageReceiveEvent rejects group messages for MVP", () => {
+test("parseMessageReceiveEvent extracts group text only when bot is mentioned", () => {
+  const result = parseMessageReceiveEvent(
+    {
+      event: {
+        sender: { sender_id: { open_id: "ou_123" } },
+        message: {
+          message_id: "om_123",
+          chat_id: "oc_123",
+          chat_type: "group",
+          message_type: "text",
+          content: JSON.stringify({
+            text: "@_user_1 帮我看项目状态",
+            mentions: [{ key: "@_user_1", id: { open_id: "ou_bot" } }],
+          }),
+        },
+      },
+    },
+    { botOpenId: "ou_bot" },
+  );
+
+  assert.deepEqual(result, {
+    messageId: "om_123",
+    openId: "ou_123",
+    chatId: "oc_123",
+    chatType: "group",
+    text: "帮我看项目状态",
+  });
+});
+
+test("parseMessageReceiveEvent rejects group messages without bot mention", () => {
   assert.throws(
     () =>
-      parseMessageReceiveEvent({
-        event: {
-          sender: { sender_id: { open_id: "ou_123" } },
-          message: {
-            message_id: "om_123",
-            chat_id: "oc_123",
-            chat_type: "group",
-            message_type: "text",
-            content: JSON.stringify({ text: "hello" }),
+      parseMessageReceiveEvent(
+        {
+          event: {
+            sender: { sender_id: { open_id: "ou_123" } },
+            message: {
+              message_id: "om_123",
+              chat_id: "oc_123",
+              chat_type: "group",
+              message_type: "text",
+              content: JSON.stringify({ text: "hello" }),
+            },
           },
         },
-      }),
+        { botOpenId: "ou_bot" },
+      ),
     UnsupportedFeishuEventError,
   );
 });

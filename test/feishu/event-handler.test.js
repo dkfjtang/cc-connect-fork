@@ -32,6 +32,7 @@ test("handleMessageReceive passes parsed text message to bridge runtime", async 
       messageId: "om_123",
       openId: "ou_123",
       chatId: "oc_123",
+      chatType: "p2p",
       text: "hello",
     },
   ]);
@@ -61,7 +62,47 @@ test("handleMessageReceive skips unsupported events", async () => {
   });
 
   assert.equal(result.status, "skipped");
-  assert.match(result.reason, /Only private chat messages/);
+  assert.match(result.reason, /Group messages require bot open_id|Group message does not mention bot/);
+});
+
+test("handleMessageReceive handles group text when bot is mentioned", async () => {
+  const calls = [];
+  const handler = new FeishuEventHandler({
+    botOpenId: "ou_bot",
+    runtime: {
+      handleTextMessage: async (message) => {
+        calls.push(message);
+        return { snapshot: () => ({ status: "completed" }) };
+      },
+    },
+  });
+
+  const result = await handler.handleMessageReceive({
+    event: {
+      sender: { sender_id: { open_id: "ou_123" } },
+      message: {
+        message_id: "om_123",
+        chat_id: "oc_group",
+        chat_type: "group",
+        message_type: "text",
+        content: JSON.stringify({
+          text: "@_user_1 帮我看项目状态",
+          mentions: [{ key: "@_user_1", id: { open_id: "ou_bot" } }],
+        }),
+      },
+    },
+  });
+
+  assert.deepEqual(calls, [
+    {
+      messageId: "om_123",
+      openId: "ou_123",
+      chatId: "oc_group",
+      chatType: "group",
+      text: "帮我看项目状态",
+    },
+  ]);
+  assert.deepEqual(result, { status: "handled", taskStatus: "completed" });
 });
 
 test("handleMessageReceive serializes messages in the same chat", async () => {

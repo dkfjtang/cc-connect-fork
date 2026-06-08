@@ -74,10 +74,12 @@ test("handleTextMessage creates and stores a thread when mapping is missing", as
     messageId: "msg_123",
     openId: "ou_allowed",
     chatId: "oc_123",
+    chatType: "group",
     text: "hello",
   });
 
   assert.equal(task.snapshot().threadId, "thr_new");
+  assert.equal(task.snapshot().feishuChatType, "group");
   assert.equal(task.snapshot().model, "gpt-5.1-codex");
   assert.equal(task.snapshot().appVersion, "0.2.0-test");
   assert.deepEqual(

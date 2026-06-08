@@ -45,7 +45,7 @@ export class BridgeRuntime {
     };
   }
 
-  async handleTextMessage({ messageId, openId, chatId, text }) {
+  async handleTextMessage({ messageId, openId, chatId, chatType = null, text }) {
     if (!this.#policy.canUseOpenId(openId)) {
       throw new Error("Feishu user is not allowed");
     }
@@ -60,6 +60,7 @@ export class BridgeRuntime {
       feishuMessageId: messageId,
       feishuOpenId: openId,
       feishuChatId: chatId,
+      feishuChatType: chatType,
       cwd,
       model: this.#model,
       appVersion: this.#appVersion,
@@ -250,6 +251,9 @@ export class BridgeRuntime {
       errorType: snapshot.errorType,
       ...extraFields,
     };
+    if (snapshot.feishuChatType) {
+      fields.chatType = snapshot.feishuChatType;
+    }
 
     const write = this.#logger[level] ?? this.#logger.info ?? (() => {});
     write(event, fields);

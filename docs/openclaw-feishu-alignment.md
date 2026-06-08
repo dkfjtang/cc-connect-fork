@@ -48,6 +48,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | 能力 | OpenClaw 行为 | fca 当前状态 |
 | --- | --- | --- |
 | 私聊文本入口 | 支持 DM 消息进入 Agent | 已支持私聊文本解析 |
+| 群聊 @ 入口 | 群聊需要按 mention、群配置和发送者策略触发 | 已支持明确 @ 当前 bot 的群聊文本；仍以发送者 `open_id` 白名单为权限依据，群 allowlist 后续补齐 |
 | 卡片持续更新 | 先发卡片，再更新同一张卡片 | 已有 send / update action 和 controller，并串行化同一卡片更新 |
 | footer | 可展示状态、耗时、模型、token 等 | 已展示 status / thread / turn / elapsed / model / fca version / error type / cwd |
 | app 归属校验 | 事件 app_id 不匹配时丢弃 | 已支持 `FEISHU_APP_ID` 校验 |
@@ -67,7 +68,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | P0 | 按 chat / thread 串行队列 | 已增加 per-chat queue，避免同一会话并发 turn 打乱卡片 |
 | P0 | 卡片更新节流 | 已增加 delta 聚合低频 patch 和同一卡片更新队列 |
 | P1 | CardKit 优先、IM patch fallback | MVP 先用 IM card patch，后续增加 CardKit 2.0 |
-| P1 | 群聊策略 | 私聊稳定后再做群聊 @、群 allowlist、sender allowlist |
+| P1 | 群聊策略 | 已完成群聊 @ 最小入口；群 allowlist、群配置和 sender 细分策略后续补齐 |
 | P1 | 卡片交互审批 | Codex approval event 映射到飞书按钮回调 |
 | P2 | 文件/图片资源 | 后续作为 Codex 输入附件和输出附件能力规划 |
 | P2 | 文档/多维表/日历/任务工具 | 不属于 fca MVP；只在 Codex 能力需要飞书工具时评估 |
@@ -80,7 +81,7 @@ fca 第一阶段不追求完整复制工具生态，优先对齐“飞书作为 
 | P0 | 消息事件去重、回放过滤、自回声过滤 | 已实现基础护栏和持久化去重窗口，避免进程重启后重复处理 |
 | P0 | 持续回复卡片更新、节流和最终态兜底 | 已实现 running 节流、同一卡片互斥 flush 和最终态更新；后续补失败重试策略 |
 | P0 | 卡片 footer 的状态、会话和排障字段 | 已展示 status / thread / turn / elapsed / model / fca version / error type / cwd；后续补 token/cache 等更细指标 |
-| P1 | 群聊 @、群配置和发送者策略 | 私聊稳定后实现群 allowlist、sender allowlist 和 @ 触发 |
+| P1 | 群聊 @、群配置和发送者策略 | 已实现 @ 触发和发送者 `open_id` 白名单复用；后续补群 allowlist、sender 细分策略和群级配置 |
 | P1 | 敏感操作确认卡片 | 映射到 Codex approval event，不复用 OpenClaw tool approval 内核 |
 | P1 | CardKit 2.0 与普通卡片降级 | 先保留 IM patch；后续实现 CardKit 优先、IM patch fallback |
 
@@ -96,6 +97,13 @@ OpenClaw 的入站链路包含以下护栏：
 6. 对取消文本走快速中断路径。
 
 fca 当前已实现 1 到 6。
+
+群聊入口的当前安全边界：
+
+- 仅 `chat_type=group` 且文本内容的 `mentions` 包含当前 bot `open_id` 时进入任务链路。
+- 解析时会移除 mention key，只把用户真实任务文本交给 Codex。
+- 普通群聊文本继续跳过，不作为后台触发命令。
+- 进入运行时后仍以发送者 `open_id` 白名单为准，不使用群名、昵称等可变展示字段做权限依据。
 
 ## 卡片体验对齐
 

@@ -37,7 +37,7 @@ fca 可以高度复用 OpenClaw 类飞书插件的交互体验，但不应完全
 
 最小体验：
 
-1. 用户发送任务文本。
+1. 用户在私聊发送任务文本，或在群聊中明确 @ Bot 后发送任务文本。
 2. fca 立即回复一张任务卡片，状态为“已接收”。
 3. Codex turn 启动后，卡片更新为“执行中”。
 4. Codex 输出阶段性消息时，卡片摘要区域更新。
@@ -112,6 +112,7 @@ fca 可以高度复用 OpenClaw 类飞书插件的交互体验，但不应完全
 触发：
 
 - 私聊内发送 `取消`、`停止`、`stop`、`abort` 或 `cancel`。
+- 群聊内明确 @ Bot 并发送上述取消文本。
 - fca 会绕过同 chat 队列，优先将当前 active task 标记为 cancelled。
 - 如当前 task 已有 `thread_id` 和 `turn_id`，fca 会调用 Codex app-server `turn/interrupt`。
 
@@ -209,6 +210,7 @@ MVP 策略：
 MVP 可以先实现：
 
 - 私聊文本触发。
+- 群聊内明确 @ Bot 的文本触发。
 - 首条任务卡片。
 - running / completed / failed 三态更新。
 - footer 展示 thread、turn、cwd、耗时。
@@ -217,7 +219,8 @@ MVP 可以先实现：
 当前工程已落地的 SDK 无关部分：
 
 - 私聊文本事件解析。
-- 非私聊、非文本和空文本消息跳过。
+- 群聊 @ Bot 文本事件解析，并移除 mention key 后交给 Codex。
+- 普通群聊、非文本和空文本消息跳过。
 - 任务卡片 payload 渲染。
 - 发送新卡片和更新已有卡片的动作构造。
 - 飞书消息 action 到 transport 调用的适配边界。
@@ -226,6 +229,6 @@ MVP 暂不实现：
 
 - 审批按钮。
 - 文件卡片。
-- 群聊交互。
+- 群 allowlist、群配置和群级系统提示词。
 - 复杂 Markdown 渲染。
 - 卡片 JSON 2.0 高级组件。

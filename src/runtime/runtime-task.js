@@ -5,6 +5,7 @@ export class RuntimeTask {
   #feishuMessageId;
   #feishuOpenId;
   #feishuChatId;
+  #feishuChatType;
   #cardMessageId = null;
   #threadId = null;
   #turnId = null;
@@ -24,6 +25,7 @@ export class RuntimeTask {
     feishuMessageId = null,
     feishuOpenId = null,
     feishuChatId = null,
+    feishuChatType = null,
     cwd = null,
     model = null,
     appVersion = null,
@@ -34,6 +36,7 @@ export class RuntimeTask {
     this.#feishuMessageId = feishuMessageId;
     this.#feishuOpenId = feishuOpenId;
     this.#feishuChatId = feishuChatId;
+    this.#feishuChatType = feishuChatType;
     this.#cwd = cwd;
     this.#model = model;
     this.#appVersion = appVersion;
@@ -86,6 +89,7 @@ export class RuntimeTask {
       feishuMessageId: this.#feishuMessageId,
       feishuOpenId: this.#feishuOpenId,
       feishuChatId: this.#feishuChatId,
+      feishuChatType: this.#feishuChatType,
       cardMessageId: this.#cardMessageId,
       threadId: this.#threadId,
       turnId: this.#turnId,

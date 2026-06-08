@@ -37,7 +37,7 @@ export class FeishuEventHandler {
 
     let message;
     try {
-      message = parseMessageReceiveEvent(payload);
+      message = parseMessageReceiveEvent(payload, { botOpenId: this.#botOpenId });
     } catch (error) {
       if (error instanceof UnsupportedFeishuEventError) {
         return { status: "skipped", reason: error.message };

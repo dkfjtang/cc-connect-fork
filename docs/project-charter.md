@@ -31,7 +31,7 @@ OpenClaw / ClawBot 案例证明了“聊天入口 + 本地 Agent 执行端”的
 
 1. 飞书企业自建应用配置。
 2. 长连接接收 `im.message.receive_v1` 消息事件。
-3. Bridge 服务解析私聊文本消息。
+3. Bridge 服务解析私聊文本消息和明确 @ Bot 的群聊文本消息。
 4. 通过本地 `codex app-server` 创建或复用 thread，并启动 turn。
 5. 将最终结果回复到飞书。
 6. 输出基础日志和错误提示。
@@ -42,7 +42,7 @@ OpenClaw / ClawBot 案例证明了“聊天入口 + 本地 Agent 执行端”的
 - `/cwd`、`/status`、`/clear`、`/permission` 等控制命令。
 - 飞书交互卡片审批。
 - 文件、图片、文档下载与回传。
-- 群聊 @ 机器人触发。
+- 群聊 allowlist、群级配置和系统提示词。
 - 工作目录白名单。
 - 任务队列、超时、重试和分片回复。
 
