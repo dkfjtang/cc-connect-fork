@@ -18,6 +18,7 @@ import (
 
 type watchdogCheckpointOptions struct {
 	DataDir       string
+	ConfigPath    string
 	Wait          bool
 	Skip          bool
 	ElapsedMins   int
@@ -65,7 +66,7 @@ func runWatchdogCheckpoint(args []string) {
 		return
 	}
 
-	sockPath := resolveSocketPath(opts.DataDir)
+	sockPath := resolveSocketPathFromOptions(socketPathOptions{DataDir: opts.DataDir, ConfigPath: opts.ConfigPath})
 	if _, err := os.Stat(sockPath); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
@@ -181,6 +182,12 @@ func parseWatchdogCheckpointArgs(args []string) (core.DecisionAskRequest, watchd
 			}
 			i++
 			opts.DataDir = args[i]
+		case "--config":
+			if i+1 >= len(args) {
+				return req, opts, fmt.Errorf("--config requires a value")
+			}
+			i++
+			opts.ConfigPath = args[i]
 		case "--help", "-h":
 			return req, opts, errWatchdogUsage
 		default:
@@ -239,7 +246,7 @@ func runWatchdogCheckpointWithClient(ctx context.Context, client *http.Client, b
 
 func printWatchdogUsage() {
 	fmt.Println(`Usage:
-  cc-connect watchdog checkpoint --task <name> --summary <text> --elapsed-mins <n> [--threshold-mins 10] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--choices continue,pause,revise,ignore,remind_later,reconnect] [--wait]
+  cc-connect watchdog checkpoint --task <name> --summary <text> --elapsed-mins <n> [--threshold-mins 10] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--choices continue,pause,revise,ignore,remind_later,reconnect] [--config path | --data-dir dir] [--wait]
 
 Examples:
   cc-connect watchdog checkpoint --task "生产发布复核" --summary "测试已运行 12 分钟，仍有 1 个失败用例" --elapsed-mins 12 --wait`)

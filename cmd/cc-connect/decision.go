@@ -18,8 +18,9 @@ import (
 )
 
 type decisionCLIOptions struct {
-	DataDir string
-	Wait    bool
+	DataDir    string
+	ConfigPath string
+	Wait       bool
 }
 
 var errDecisionUsage = errors.New("show decision usage")
@@ -53,7 +54,7 @@ func runDecisionAsk(args []string) {
 		os.Exit(1)
 	}
 
-	sockPath := resolveSocketPath(opts.DataDir)
+	sockPath := resolveSocketPathFromOptions(socketPathOptions{DataDir: opts.DataDir, ConfigPath: opts.ConfigPath})
 	if _, err := os.Stat(sockPath); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
@@ -169,6 +170,12 @@ func parseDecisionAskArgs(args []string) (core.DecisionAskRequest, decisionCLIOp
 			}
 			i++
 			opts.DataDir = args[i]
+		case "--config":
+			if i+1 >= len(args) {
+				return req, opts, fmt.Errorf("--config requires a value")
+			}
+			i++
+			opts.ConfigPath = args[i]
 		case "--help", "-h":
 			return req, opts, errDecisionUsage
 		default:
@@ -271,7 +278,7 @@ func formatDecisionDedupedCLIResponse(body []byte) string {
 
 func printDecisionUsage() {
 	fmt.Println(`Usage:
-  cc-connect decision ask --title <text> --message <text> --choices continue,abort,revise,ignore,remind_later,reconnect [--recommended continue] [--timeout-mins 30] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--wait]
+  cc-connect decision ask --title <text> --message <text> --choices continue,abort,revise,ignore,remind_later,reconnect [--recommended continue] [--timeout-mins 30] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--config path | --data-dir dir] [--wait]
 
 Examples:
   cc-connect decision ask --title "需要确认" --message "测试失败，需要改方案吗？" --choices "continue,abort,revise,ignore,remind_later,reconnect" --wait`)

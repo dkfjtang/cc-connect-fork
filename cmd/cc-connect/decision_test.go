@@ -34,6 +34,27 @@ func TestParseDecisionAskArgsDefaults(t *testing.T) {
 	if req.TimeoutMins != 30 {
 		t.Fatalf("TimeoutMins = %d, want 30", req.TimeoutMins)
 	}
+	if opts.ConfigPath != "" {
+		t.Fatalf("ConfigPath = %q, want empty", opts.ConfigPath)
+	}
+}
+
+func TestParseDecisionAskArgsConfigPath(t *testing.T) {
+	req, opts, err := parseDecisionAskArgs([]string{
+		"--title", "Need confirmation",
+		"--message", "Proceed?",
+		"--choices", "continue,revise",
+		"--config", "C:/tmp/config.toml",
+	})
+	if err != nil {
+		t.Fatalf("parse error = %v", err)
+	}
+	if req.Title != "Need confirmation" || req.Message != "Proceed?" {
+		t.Fatalf("req = %#v", req)
+	}
+	if opts.ConfigPath != "C:/tmp/config.toml" {
+		t.Fatalf("ConfigPath = %q", opts.ConfigPath)
+	}
 }
 
 func TestParseDecisionAskArgsNotificationDedup(t *testing.T) {

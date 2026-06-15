@@ -41,6 +41,24 @@ func TestParseWatchdogCheckpointArgsDefaults(t *testing.T) {
 	if req.Recommended != "continue" {
 		t.Fatalf("Recommended = %q", req.Recommended)
 	}
+	if opts.ConfigPath != "" {
+		t.Fatalf("ConfigPath = %q, want empty", opts.ConfigPath)
+	}
+}
+
+func TestParseWatchdogCheckpointArgsConfigPath(t *testing.T) {
+	_, opts, err := parseWatchdogCheckpointArgs([]string{
+		"--task", "release gate",
+		"--summary", "tests are still running",
+		"--elapsed-mins", "12",
+		"--config", "C:/tmp/config.toml",
+	})
+	if err != nil {
+		t.Fatalf("parseWatchdogCheckpointArgs error = %v", err)
+	}
+	if opts.ConfigPath != "C:/tmp/config.toml" {
+		t.Fatalf("ConfigPath = %q", opts.ConfigPath)
+	}
 }
 
 func TestParseWatchdogCheckpointArgsNotificationDedup(t *testing.T) {

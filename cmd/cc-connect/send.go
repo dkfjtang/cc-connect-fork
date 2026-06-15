@@ -12,8 +12,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
+	"github.com/BurntSushi/toml"
 	"github.com/chenhg5/cc-connect/core"
 )
 
@@ -306,18 +308,94 @@ func decodeSendPayload(data []byte, req *core.SendRequest) error {
 	return json.Unmarshal(data, req)
 }
 
+type socketPathOptions struct {
+	DataDir    string
+	ConfigPath string
+}
+
 func resolveSocketPath(dataDir string) string {
-	if dataDir != "" {
-		return filepath.Join(dataDir, "run", "api.sock")
+	return resolveSocketPathFromOptions(socketPathOptions{DataDir: dataDir})
+}
+
+func resolveSocketPathFromOptions(opts socketPathOptions) string {
+	if opts.DataDir == "" && opts.ConfigPath != "" {
+		if dataDir := readConfigDataDir(opts.ConfigPath); dataDir != "" {
+			opts.DataDir = dataDir
+		}
 	}
-	// Check CC_DATA_DIR env var for custom data_dir configuration
-	if envDataDir := strings.TrimSpace(os.Getenv("CC_DATA_DIR")); envDataDir != "" {
-		return filepath.Join(envDataDir, "run", "api.sock")
+	if opts.DataDir == "" {
+		if envDataDir := strings.TrimSpace(os.Getenv("CC_DATA_DIR")); envDataDir != "" {
+			opts.DataDir = envDataDir
+		}
+	}
+	if opts.DataDir == "" {
+		if dataDir := resolveDataDirFromRunningConfig(); dataDir != "" {
+			opts.DataDir = dataDir
+		}
+	}
+	if opts.DataDir == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			opts.DataDir = filepath.Join(home, ".cc-connect")
+		} else {
+			opts.DataDir = ".cc-connect"
+		}
+	}
+	return filepath.Join(opts.DataDir, "run", "api.sock")
+}
+
+func resolveDataDirFromRunningConfig() string {
+	for _, configPath := range runningConfigCandidates() {
+		lockPath := filepath.Join(filepath.Dir(configPath), "."+filepath.Base(configPath)+".lock")
+		data, err := os.ReadFile(lockPath)
+		if err != nil {
+			continue
+		}
+		pid, err := strconv.Atoi(strings.TrimSpace(string(data)))
+		if err != nil || pid <= 0 {
+			continue
+		}
+		if dataDir := readConfigDataDir(configPath); dataDir != "" {
+			return dataDir
+		}
+	}
+	return ""
+}
+
+func readConfigDataDir(configPath string) string {
+	var cfg struct {
+		DataDir string `toml:"data_dir"`
+	}
+	if _, err := toml.DecodeFile(configPath, &cfg); err != nil {
+		return ""
+	}
+	return strings.TrimSpace(os.ExpandEnv(cfg.DataDir))
+}
+
+func runningConfigCandidates() []string {
+	var out []string
+	if env := strings.TrimSpace(os.Getenv("CC_CONNECT_CONFIG")); env != "" {
+		out = append(out, env)
+	}
+	if env := strings.TrimSpace(os.Getenv("CC_CONFIG")); env != "" {
+		out = append(out, env)
+	}
+	if env := strings.TrimSpace(os.Getenv("CC_CONNECT_SERVICE_DIRS")); env != "" {
+		for _, part := range strings.Split(env, string(os.PathListSeparator)) {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			out = append(out, filepath.Join(part, "config.toml"))
+		}
+	}
+	if exe, err := os.Executable(); err == nil {
+		out = append(out, filepath.Join(filepath.Dir(exe), "config.toml"))
 	}
 	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".cc-connect", "run", "api.sock")
+		out = append(out, filepath.Join(home, ".cc-connect", "config.toml"))
 	}
-	return filepath.Join(".cc-connect", "run", "api.sock")
+	out = append(out, "config.toml")
+	return out
 }
 
 func printSendUsage() {
