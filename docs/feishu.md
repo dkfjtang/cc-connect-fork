@@ -150,7 +150,7 @@ cc-connect decision ask \
 
 ```text
 choice=continue
-comment=继续，先不要改生产配置
+comment="继续，先不要改生产配置"
 ```
 
 说明：
