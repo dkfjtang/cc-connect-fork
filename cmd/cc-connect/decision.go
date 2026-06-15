@@ -17,8 +17,9 @@ import (
 )
 
 type decisionAskOptions struct {
-	dataDir string
-	wait    bool
+	dataDir    string
+	configPath string
+	wait       bool
 }
 
 var errDecisionUsage = errors.New("show decision usage")
@@ -51,7 +52,7 @@ func runDecisionAsk(args []string) {
 		printDecisionAskUsage()
 		os.Exit(1)
 	}
-	sockPath := resolveSocketPath(opts.dataDir)
+	sockPath := resolveSocketPathFromOptions(socketPathOptions{DataDir: opts.dataDir, ConfigPath: opts.configPath})
 	if _, err := os.Stat(sockPath); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
@@ -137,6 +138,12 @@ func parseDecisionAskArgs(args []string) (core.DecisionAskRequest, decisionAskOp
 			}
 			i++
 			opts.dataDir = args[i]
+		case "--config":
+			if i+1 >= len(args) {
+				return req, opts, fmt.Errorf("--config requires a value")
+			}
+			i++
+			opts.configPath = args[i]
 		case "--help", "-h":
 			return req, opts, errDecisionUsage
 		default:
@@ -212,7 +219,7 @@ func closeDecisionResponseBody(body io.Closer) {
 
 func printDecisionUsage() {
 	fmt.Println(`Usage:
-  cc-connect decision ask --title <text> --message <text> --choices continue,abort,revise [--wait]`)
+  cc-connect decision ask --title <text> --message <text> --choices continue,abort,revise [--config path | --data-dir dir] [--wait]`)
 }
 
 func printDecisionAskUsage() {
@@ -223,5 +230,6 @@ Options:
   --recommended <choice>   Mark one choice as recommended
   --timeout-mins <n>       Wait timeout in minutes (default 30)
   --wait                   Wait and print choice/comment
+  --config <path>          Path to config.toml
   --data-dir <dir>         cc-connect data directory`)
 }

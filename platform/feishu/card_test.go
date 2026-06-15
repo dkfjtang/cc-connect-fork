@@ -125,6 +125,47 @@ func TestRenderCardMap_TwoEqualColumnsUseBisectAndCenteredButtons(t *testing.T) 
 	}
 }
 
+func TestBuildDecisionCardSplitsManyActionsIntoRows(t *testing.T) {
+	dec := core.Decision{
+		ID:          "dec_123",
+		Title:       "六选项验证",
+		Message:     "验证去重。",
+		Choices:     []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+		Recommended: "continue",
+	}
+	got := decodeRenderedCard(t, buildDecisionCard(dec))
+
+	elements, ok := got["elements"].([]any)
+	if !ok || len(elements) != 1 {
+		t.Fatalf("elements = %#v, want one form", got["elements"])
+	}
+	form, ok := elements[0].(map[string]any)
+	if !ok || form["tag"] != "form" {
+		t.Fatalf("first element = %#v, want form", elements[0])
+	}
+	formElements, ok := form["elements"].([]any)
+	if !ok {
+		t.Fatalf("form elements = %#v, want array", form["elements"])
+	}
+
+	var columnSets []map[string]any
+	for _, elem := range formElements {
+		m, ok := elem.(map[string]any)
+		if ok && m["tag"] == "column_set" {
+			columnSets = append(columnSets, m)
+		}
+	}
+	if len(columnSets) != 2 {
+		t.Fatalf("column sets = %d, want 2", len(columnSets))
+	}
+	for i, set := range columnSets {
+		columns, ok := set["columns"].([]any)
+		if !ok || len(columns) != 3 {
+			t.Fatalf("row %d columns = %#v, want 3 columns", i, set["columns"])
+		}
+	}
+}
+
 func TestRenderCardMap_DefaultActionsStayActionRow(t *testing.T) {
 	buttons := []core.CardButton{
 		core.PrimaryBtn("Yes", "act:/yes"),

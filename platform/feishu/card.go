@@ -521,11 +521,17 @@ func renderDecisionCard(card *core.Card, base map[string]any) (map[string]any, b
 			},
 		})
 	}
-	formElements = append(formElements, map[string]any{
-		"tag":              "column_set",
-		"horizontal_align": "left",
-		"columns":          buttonColumns,
-	})
+	for _, row := range chunkColumns(buttonColumns, 3) {
+		columnSet := map[string]any{
+			"tag":              "column_set",
+			"horizontal_align": "left",
+			"columns":          row,
+		}
+		if len(row) == 2 {
+			columnSet["flex_mode"] = "bisect"
+		}
+		formElements = append(formElements, columnSet)
+	}
 
 	base["elements"] = []map[string]any{
 		{
@@ -535,6 +541,21 @@ func renderDecisionCard(card *core.Card, base map[string]any) (map[string]any, b
 		},
 	}
 	return base, true
+}
+
+func chunkColumns(columns []map[string]any, size int) [][]map[string]any {
+	if size <= 0 || len(columns) == 0 {
+		return nil
+	}
+	rows := make([][]map[string]any, 0, (len(columns)+size-1)/size)
+	for start := 0; start < len(columns); start += size {
+		end := start + size
+		if end > len(columns) {
+			end = len(columns)
+		}
+		rows = append(rows, columns[start:end])
+	}
+	return rows
 }
 
 func normalizeDeleteModeCheckerText(text string) string {

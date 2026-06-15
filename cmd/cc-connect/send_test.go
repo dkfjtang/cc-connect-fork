@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -51,6 +52,21 @@ func TestParseSendArgs_RequiresMessageOrAttachment(t *testing.T) {
 	_, _, err := parseSendArgs(nil)
 	if err == nil {
 		t.Fatal("expected error for empty send args")
+	}
+}
+
+func TestResolveSocketPath_UsesConfigDataDir(t *testing.T) {
+	dir := t.TempDir()
+	dataDir := filepath.Join(dir, "service-data")
+	configPath := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(configPath, []byte("data_dir = "+strconv.Quote(dataDir)+"\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	got := resolveSocketPathFromOptions(socketPathOptions{ConfigPath: configPath})
+	want := filepath.Join(dataDir, "run", "api.sock")
+	if got != want {
+		t.Fatalf("socket path = %q, want %q", got, want)
 	}
 }
 
