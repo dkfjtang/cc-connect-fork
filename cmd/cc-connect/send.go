@@ -18,7 +18,7 @@ import (
 )
 
 func runSend(args []string) {
-	req, dataDir, err := parseSendArgs(args)
+	req, opts, err := parseSendArgs(args)
 	if err != nil {
 		if errors.Is(err, errSendUsage) {
 			printSendUsage()
@@ -29,7 +29,7 @@ func runSend(args []string) {
 		os.Exit(1)
 	}
 
-	sockPath := resolveSocketPath(dataDir)
+	sockPath := resolveSocketPathFromOptions(socketPathOptions{DataDir: opts.DataDir, ConfigPath: opts.ConfigPath})
 	if _, err := os.Stat(sockPath); os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
@@ -41,7 +41,7 @@ func runSend(args []string) {
 		os.Exit(1)
 	}
 
-	token := loadLocalAPIToken(localAPIOptions{DataDir: dataDir})
+	token := loadLocalAPIToken(localAPIOptions{DataDir: opts.DataDir, ConfigPath: opts.ConfigPath})
 	client := localAPIClient(sockPath, token)
 
 	httpReq, err := http.NewRequest(http.MethodPost, "http://unix/send", bytes.NewReader(payload))
@@ -68,9 +68,14 @@ func runSend(args []string) {
 
 var errSendUsage = errors.New("show send usage")
 
-func parseSendArgs(args []string) (core.SendRequest, string, error) {
+type sendCLIOptions struct {
+	DataDir    string
+	ConfigPath string
+}
+
+func parseSendArgs(args []string) (core.SendRequest, sendCLIOptions, error) {
 	var req core.SendRequest
-	var dataDir string
+	var opts sendCLIOptions
 	var useStdin bool
 	var imagePaths []string
 	var filePaths []string
@@ -82,43 +87,43 @@ func parseSendArgs(args []string) (core.SendRequest, string, error) {
 		switch args[i] {
 		case "--project", "-p":
 			if i+1 >= len(args) {
-				return req, "", fmt.Errorf("--project requires a value")
+				return req, opts, fmt.Errorf("--project requires a value")
 			}
 			i++
 			req.Project = args[i]
 		case "--session", "-s":
 			if i+1 >= len(args) {
-				return req, "", fmt.Errorf("--session requires a value")
+				return req, opts, fmt.Errorf("--session requires a value")
 			}
 			i++
 			req.SessionKey = args[i]
 		case "--message", "-m":
 			if i+1 >= len(args) {
-				return req, "", fmt.Errorf("--message requires a value")
+				return req, opts, fmt.Errorf("--message requires a value")
 			}
 			i++
 			req.Message = args[i]
 		case "--image":
 			if i+1 >= len(args) {
-				return req, "", fmt.Errorf("--image requires a path")
+				return req, opts, fmt.Errorf("--image requires a path")
 			}
 			i++
 			imagePaths = append(imagePaths, args[i])
 		case "--file":
 			if i+1 >= len(args) {
-				return req, "", fmt.Errorf("--file requires a path")
+				return req, opts, fmt.Errorf("--file requires a path")
 			}
 			i++
 			filePaths = append(filePaths, args[i])
 		case "--audio":
 			if i+1 >= len(args) {
-				return req, "", fmt.Errorf("--audio requires a path")
+				return req, opts, fmt.Errorf("--audio requires a path")
 			}
 			i++
 			audioPaths = append(audioPaths, args[i])
 		case "--video":
 			if i+1 >= len(args) {
-				return req, "", fmt.Errorf("--video requires a path")
+				return req, opts, fmt.Errorf("--video requires a path")
 			}
 			i++
 			videoPaths = append(videoPaths, args[i])
@@ -126,7 +131,7 @@ func parseSendArgs(args []string) (core.SendRequest, string, error) {
 			useStdin = true
 		case "--at-users":
 			if i+1 >= len(args) {
-				return req, "", fmt.Errorf("--at-users requires a value")
+				return req, opts, fmt.Errorf("--at-users requires a value")
 			}
 			i++
 			for _, uid := range strings.Split(args[i], ",") {
@@ -139,12 +144,18 @@ func parseSendArgs(args []string) (core.SendRequest, string, error) {
 			req.AtAll = true
 		case "--data-dir":
 			if i+1 >= len(args) {
-				return req, "", fmt.Errorf("--data-dir requires a value")
+				return req, opts, fmt.Errorf("--data-dir requires a value")
 			}
 			i++
-			dataDir = args[i]
+			opts.DataDir = args[i]
+		case "--config":
+			if i+1 >= len(args) {
+				return req, opts, fmt.Errorf("--config requires a value")
+			}
+			i++
+			opts.ConfigPath = args[i]
 		case "--help", "-h":
-			return req, "", errSendUsage
+			return req, opts, errSendUsage
 		default:
 			positional = append(positional, args[i])
 		}
@@ -153,7 +164,7 @@ func parseSendArgs(args []string) (core.SendRequest, string, error) {
 	if useStdin {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
-			return req, "", fmt.Errorf("reading stdin: %w", err)
+			return req, opts, fmt.Errorf("reading stdin: %w", err)
 		}
 		req.Message = strings.TrimSpace(string(data))
 	}
@@ -169,29 +180,29 @@ func parseSendArgs(args []string) (core.SendRequest, string, error) {
 
 	images, err := loadImageAttachments(imagePaths)
 	if err != nil {
-		return req, "", err
+		return req, opts, err
 	}
 	files, err := loadFileAttachments(filePaths)
 	if err != nil {
-		return req, "", err
+		return req, opts, err
 	}
 	audioFiles, err := loadTypedFileAttachments(audioPaths, "audio")
 	if err != nil {
-		return req, "", err
+		return req, opts, err
 	}
 	videoFiles, err := loadTypedFileAttachments(videoPaths, "video")
 	if err != nil {
-		return req, "", err
+		return req, opts, err
 	}
 	req.Images = images
 	req.Files = append(files, audioFiles...)
 	req.Files = append(req.Files, videoFiles...)
 
 	if req.Message == "" && len(req.Images) == 0 && len(req.Files) == 0 {
-		return req, "", fmt.Errorf("message or attachment is required")
+		return req, opts, fmt.Errorf("message or attachment is required")
 	}
 
-	return req, dataDir, nil
+	return req, opts, nil
 }
 
 func loadImageAttachments(paths []string) ([]core.ImageAttachment, error) {

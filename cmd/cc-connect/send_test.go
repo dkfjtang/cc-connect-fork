@@ -21,12 +21,12 @@ func TestParseSendArgs_AttachmentsWithoutMessage(t *testing.T) {
 		t.Fatalf("write doc: %v", err)
 	}
 
-	req, dataDir, err := parseSendArgs([]string{"--image", imgPath, "--file", docPath})
+	req, opts, err := parseSendArgs([]string{"--image", imgPath, "--file", docPath})
 	if err != nil {
 		t.Fatalf("parseSendArgs returned error: %v", err)
 	}
-	if dataDir != "" {
-		t.Fatalf("dataDir = %q, want empty", dataDir)
+	if opts.DataDir != "" {
+		t.Fatalf("dataDir = %q, want empty", opts.DataDir)
 	}
 	if req.Message != "" {
 		t.Fatalf("message = %q, want empty", req.Message)
@@ -45,6 +45,16 @@ func TestParseSendArgs_AttachmentsWithoutMessage(t *testing.T) {
 	}
 	if req.Files[0].FileName != "report.txt" {
 		t.Fatalf("file filename = %q, want report.txt", req.Files[0].FileName)
+	}
+}
+
+func TestParseSendArgsConfigPath(t *testing.T) {
+	_, opts, err := parseSendArgs([]string{"--config", "C:/tmp/config.toml", "--message", "hi"})
+	if err != nil {
+		t.Fatalf("parseSendArgs returned error: %v", err)
+	}
+	if opts.ConfigPath != "C:/tmp/config.toml" {
+		t.Fatalf("ConfigPath = %q, want C:/tmp/config.toml", opts.ConfigPath)
 	}
 }
 
