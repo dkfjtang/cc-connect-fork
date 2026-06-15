@@ -167,10 +167,10 @@ Deduplication smoke test:
 
 ```powershell
 $exe = 'F:\development\cc-connect-service\cc-connect.exe'
-$data = 'F:\development\cc-connect-service\data'
+$config = 'F:\development\cc-connect-service\config.toml'
 $key = 'smoke-dedup:<unique-id>'
 
-& $exe decision ask --data-dir $data `
+& $exe decision ask --config $config `
   --title '去重验证' `
   --message '第一次应该发卡' `
   --choices continue,pause,revise,ignore,remind_later,reconnect `
@@ -178,7 +178,7 @@ $key = 'smoke-dedup:<unique-id>'
   --event-fingerprint 'turn-1' `
   --cooldown-mins 30
 
-& $exe decision ask --data-dir $data `
+& $exe decision ask --config $config `
   --title '去重验证' `
   --message '第二次应该去重' `
   --choices continue,pause,revise,ignore,remind_later,reconnect `
@@ -205,7 +205,8 @@ If duplicate Feishu cards appear for the same event:
 If the CLI reports `cc-connect is not running`:
 
 - Check the NSSM service state.
-- Confirm `data_dir` in `config.toml` matches the `--data-dir` passed by the CLI.
+- Prefer passing `--config F:\development\cc-connect-service\config.toml`; the CLI reads `data_dir` from that file to locate the API socket.
+- If using `--data-dir`, confirm it matches `data_dir` in `config.toml`.
 - Confirm the API socket exists under `<data_dir>\run\api.sock`.
 
 Operational security:

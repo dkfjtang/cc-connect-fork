@@ -142,6 +142,7 @@ cc-connect decision ask \
   --choices "continue,abort,revise,ignore,remind_later,reconnect" \
   --recommended continue \
   --timeout-mins 30 \
+  --config "F:\development\cc-connect-service\config.toml" \
   --wait
 ```
 
@@ -166,6 +167,7 @@ cc-connect watchdog checkpoint \
   --summary "测试已运行 12 分钟，仍有 1 个失败用例，需要确认下一步" \
   --elapsed-mins 12 \
   --threshold-mins 10 \
+  --config "F:\development\cc-connect-service\config.toml" \
   --wait
 ```
 
