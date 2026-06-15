@@ -122,3 +122,91 @@ Recommended Codex behavior after a choice:
 - The active session must voluntarily call the command.
 - Real Feishu callback behavior should still be smoke-tested on the user's machine after deployment.
 - Background cleanup is access-driven in the current decision store; long-lived daemon operators should monitor memory if decision requests are created and never read.
+
+## Windows Service Operations
+
+The personal watchdog can run as an NSSM-managed Windows service so Codex sessions and Codex automations can call the same long-lived cc-connect API.
+
+Recommended local service layout:
+
+```text
+Service name: cc-connect-codex-feishu
+Runtime dir:  F:\development\cc-connect-service
+Binary:       F:\development\cc-connect-service\cc-connect.exe
+Config:       F:\development\cc-connect-service\config.toml
+Data dir:     F:\development\cc-connect-service\data
+API socket:   F:\development\cc-connect-service\data\run\api.sock
+Out log:      F:\development\cc-connect-service\logs\cc-connect.out.log
+Err log:      F:\development\cc-connect-service\logs\cc-connect.err.log
+Ledger:       F:\development\cc-connect-service\data\notifications\ledger.json
+```
+
+Check service state:
+
+```powershell
+Get-Service -Name cc-connect-codex-feishu
+```
+
+Restart after replacing the binary:
+
+```powershell
+Restart-Service -Name cc-connect-codex-feishu
+```
+
+Confirm the API socket and Feishu connection:
+
+```powershell
+Get-Item -LiteralPath F:\development\cc-connect-service\data\run\api.sock
+Get-Content -LiteralPath F:\development\cc-connect-service\logs\cc-connect.out.log -Tail 80
+```
+
+Deduplication smoke test:
+
+```powershell
+$exe = 'F:\development\cc-connect-service\cc-connect.exe'
+$data = 'F:\development\cc-connect-service\data'
+$key = 'smoke-dedup:<unique-id>'
+
+& $exe decision ask --data-dir $data `
+  --title '去重验证' `
+  --message '第一次应该发卡' `
+  --choices continue,pause,revise `
+  --event-key $key `
+  --event-fingerprint 'turn-1' `
+  --cooldown-mins 30
+
+& $exe decision ask --data-dir $data `
+  --title '去重验证' `
+  --message '第二次应该去重' `
+  --choices continue,pause,revise `
+  --event-key $key `
+  --event-fingerprint 'turn-1' `
+  --cooldown-mins 30
+```
+
+Expected second output:
+
+```text
+notification=deduped
+event_key="smoke-dedup:<unique-id>"
+event_fingerprint="turn-1"
+```
+
+If duplicate Feishu cards appear for the same event:
+
+- Confirm the service binary is newer than the deduplication change.
+- Confirm the automation passes `--event-key`, `--event-fingerprint`, and `--cooldown-mins`.
+- Confirm `ledger.json` exists under the configured `data_dir`.
+- Treat old cards created before the service update as historical; deduplication does not remove cards that were already sent.
+
+If the CLI reports `cc-connect is not running`:
+
+- Check the NSSM service state.
+- Confirm `data_dir` in `config.toml` matches the `--data-dir` passed by the CLI.
+- Confirm the API socket exists under `<data_dir>\run\api.sock`.
+
+Operational security:
+
+- Do not print Feishu `app_secret` in logs, screenshots, or support messages.
+- If `app_secret` was exposed during troubleshooting, rotate it in Feishu and update `config.toml`.
+- Back up `ledger.json` with the service data directory if suppressing duplicate notifications across service restarts matters.
