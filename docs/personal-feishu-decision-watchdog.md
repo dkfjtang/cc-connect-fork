@@ -41,6 +41,16 @@ Acceptance criteria:
 - Clicking a button resolves the waiting CLI command.
 - The CLI prints `choice=...` and `comment="..."`.
 
+On Windows, the smoke script checks the local binary and config before sending the request:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\smoke\feishu_watchdog_smoke.ps1 `
+  -CcConnect .\cc-connect.exe `
+  -Config C:\Users\<you>\.cc-connect\config.toml
+```
+
+Use `-NoWait` if you only want to verify that a decision ID is created without blocking for the Feishu button click.
+
 ## Phase 2: Codex Trigger Rules
 
 Codex should call the decision command instead of asking the user to stay at the computer.
