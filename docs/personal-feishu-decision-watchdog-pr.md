@@ -1,5 +1,23 @@
 # Add personal Feishu decision watchdog
 
+## Manual PR
+
+GitHub connector PR creation is currently blocked by integration permissions. Create the draft PR manually with:
+
+- Compare URL: `https://github.com/dkfjtang/cc-connect-fork/compare/main...codex/personal-feishu-decision-watchdog?quick_pull=1`
+- Base: `main`
+- Head: `codex/personal-feishu-decision-watchdog`
+- Title: `Add personal Feishu decision watchdog`
+- Draft: yes
+
+Before opening the PR, confirm the head branch includes:
+
+- `f9fbdd4 docs: prefer config-based watchdog CLI examples`
+- `32791a9 docs: refresh Feishu watchdog PR draft`
+- `17f6e13 feat: resolve CLI socket from config`
+- `32e356d fix: wrap Feishu decision buttons`
+- `5641412 feat: expand feishu decision choices`
+
 ## Summary
 
 Adds a personal Feishu decision/watchdog flow for local Codex tasks:
