@@ -131,6 +131,9 @@ app_secret = "QhkMpxxxxxxxxxxxxxxxxxxxx"
 ```toml
 [notify.feishu]
 default_user_id = "ou_xxx"
+
+[local_api]
+token = "${CC_CONNECT_LOCAL_API_TOKEN}"
 ```
 
 然后在本机会话中执行：
@@ -157,6 +160,7 @@ comment="继续，先不要改生产配置"
 
 - `--wait` 会阻塞当前命令，直到飞书侧完成选择或超时。
 - 默认超时是 30 分钟；超时后服务端会拒绝新的响应。
+- 如果配置了 `[local_api].token`，`decision`、`watchdog`、`cron`、`relay` 等本地 CLI 会通过 `--config` 自动读取并携带 token。Windows service 模式建议始终传 `--config`，不要只传 `--data-dir`。
 - 对于长任务，可以让当前 Codex 会话主动调用 `cc-connect watchdog checkpoint`，按阈值触发同一套飞书决策卡片。
 
 长任务检查点示例：

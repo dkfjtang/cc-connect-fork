@@ -15,6 +15,19 @@ default_user_id = "ou_xxx"
 
 The user ID should be the same Feishu User ID shown by `/whoami` or `/status`, and it should already be accepted by the Feishu platform's `allow_from` or admin settings.
 
+For Windows service mode, also configure a local API token. This protects the
+local socket API after the socket permission is relaxed enough for Codex
+automation sandboxes to call it.
+
+```toml
+[local_api]
+token = "${CC_CONNECT_LOCAL_API_TOKEN}"
+```
+
+Set `CC_CONNECT_LOCAL_API_TOKEN` in the service environment, or place a
+machine-local secret directly in `config.toml` if this is a single-user
+workstation. Do not reuse Feishu `app_secret` as the local API token.
+
 Start cc-connect normally, then verify the loop from a local shell:
 
 ```bash
@@ -164,6 +177,29 @@ Restart after replacing the binary:
 Restart-Service -Name cc-connect-codex-feishu
 ```
 
+If `[local_api].token` is configured, CLI helpers automatically read it from
+`--config`, `CC_CONNECT_LOCAL_API_TOKEN`, or the running service config lock.
+Prefer `--config` for service-mode calls so both `data_dir` and the local API
+token come from the same file:
+
+```powershell
+$exe = 'F:\development\cc-connect-service\cc-connect.exe'
+$config = 'F:\development\cc-connect-service\config.toml'
+
+& $exe decision ask --config $config `
+  --title '认证验证' `
+  --message '这条消息应通过本地 API token 认证后发送' `
+  --choices continue,pause,revise,ignore,remind_later,reconnect `
+  --event-key 'smoke-auth:decision' `
+  --event-fingerprint 'turn-1' `
+  --cooldown-mins 30
+```
+
+If the service has `[local_api].token` but the CLI cannot read it, the command
+returns `unauthorized` or fails to connect to the local socket. In that case,
+pass `--config F:\development\cc-connect-service\config.toml` or set
+`CC_CONNECT_LOCAL_API_TOKEN` for the calling process.
+
 Confirm the API socket and Feishu connection:
 
 ```powershell
@@ -219,6 +255,12 @@ If the CLI reports `cc-connect is not running`:
 
 Operational security:
 
+- Prefer setting `[local_api].token` for Windows service deployments. The local
+  API can send messages, manage cron jobs, relay to other projects, and create
+  Feishu decision cards, so the socket should not rely only on broad local file
+  ACLs when untrusted local users exist.
+- Rotate the local API token if it is pasted into chat, screenshots, shell
+  history shared outside the machine, or logs.
 - Do not print Feishu `app_secret` in logs, screenshots, or support messages.
 - If `app_secret` was exposed during troubleshooting, rotate it in Feishu and update `config.toml`.
 - Back up `ledger.json` with the service data directory if suppressing duplicate notifications across service restarts matters.
