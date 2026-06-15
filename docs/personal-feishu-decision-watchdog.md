@@ -44,6 +44,11 @@ Acceptance criteria:
 - Clicking a button resolves the waiting CLI command.
 - The CLI prints `choice=...` and `comment="..."`.
 
+Scope note:
+
+- `decision ask --wait` returns the decision only to the process that called it.
+- When a Codex automation is watching a different Codex thread, cc-connect does not directly control that target thread. The automation must take the returned `choice` and `comment`, then call the Codex thread tool such as `send_message_to_thread` for the target thread.
+
 On Windows, the smoke script checks the local binary and config before sending the request:
 
 ```powershell
@@ -119,10 +124,13 @@ Recommended Codex behavior after a choice:
 - `pause`: stop work and summarize current state, pending actions, and how to resume.
 - `revise`: treat the Feishu comment as updated user instruction and continue accordingly.
 
+For cross-thread watchdog automations, do not stop after the Feishu card is resolved. After a non-deduped decision returns, send an explicit follow-up prompt to the target Codex thread with the selected choice and comment. Only then report the巡检 summary in the watchdog thread.
+
 ## Known Boundaries
 
 - This does not inspect or control unrelated Codex sessions.
 - The active session must voluntarily call the command.
+- Cross-thread巡检 requires Codex's own thread tools to forward the user's decision to the target thread.
 - Real Feishu callback behavior should still be smoke-tested on the user's machine after deployment.
 - Background cleanup is access-driven in the current decision store; long-lived daemon operators should monitor memory if decision requests are created and never read.
 

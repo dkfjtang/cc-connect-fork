@@ -44,7 +44,12 @@ Validated locally on Windows service mode:
 - Resolved cards are replaced with a no-button result card.
 - Dedup smoke: first event creates a card; second identical `event-key/fingerprint` returns `notification=deduped`.
 - `decision ask --config F:\development\cc-connect-service\config.toml` resolves the service socket and returns deduped for an existing event.
-- Codex automation巡检 can send a Feishu decision and回写决策到目标线程.
+- Codex automation巡检 can send a Feishu decision and, after `decision ask --wait` returns, uses Codex thread tooling to回写决策到目标线程.
+
+Important boundary:
+
+- cc-connect resolves the Feishu decision back to the caller of `decision ask --wait`.
+- It does not directly control arbitrary Codex Desktop threads. Cross-thread watchdog flows must explicitly forward the returned choice/comment with Codex thread tools such as `send_message_to_thread`.
 
 ## Verification
 

@@ -180,13 +180,13 @@ When the user asks to enable Feishu watchdog, unattended mode, long-task mode, o
 Use explicit decision requests when a human choice is required:
 
 ```bash
-cc-connect decision ask --title "<short title>" --message "<facts, options, risk>" --choices "continue,pause,revise" --recommended continue --timeout-mins 30 --wait
+cc-connect decision ask --title "<short title>" --message "<facts, options, risk>" --choices "continue,pause,revise,ignore,remind_later,reconnect" --recommended continue --timeout-mins 30 --wait
 ```
 
 For recurring monitors or repeated checkpoints, include deduplication fields so the same event does not repeatedly notify Feishu:
 
 ```bash
-cc-connect decision ask --title "<short title>" --message "<facts, options, risk>" --choices "continue,pause,revise" --recommended continue --timeout-mins 30 --event-key "<thread-or-task>:<status>" --event-fingerprint "<last-turn-or-error-hash>" --cooldown-mins 30 --wait
+cc-connect decision ask --title "<short title>" --message "<facts, options, risk>" --choices "continue,pause,revise,ignore,remind_later,reconnect" --recommended continue --timeout-mins 30 --event-key "<thread-or-task>:<status>" --event-fingerprint "<last-turn-or-error-hash>" --cooldown-mins 30 --wait
 ```
 
 Use long-task checkpoints for ongoing work:
@@ -208,8 +208,11 @@ Interpret responses consistently:
 - `continue`: continue the current plan.
 - `pause`: stop and leave a concise resume report.
 - `revise`: treat the Feishu comment as updated user instruction.
+- `ignore`: ignore this notification only.
+- `remind_later`: pause this checkpoint and re-notify later.
+- `reconnect`: wake or reattach the current session before proceeding.
 
-Do not attempt to monitor or control unrelated Codex sessions across sandbox boundaries. The session doing the work must call the watchdog command itself.
+Do not attempt to monitor or control unrelated Codex sessions across sandbox boundaries through cc-connect alone. `decision ask --wait` returns only to the process that called it. If a Codex automation is watching another Codex thread, it must explicitly forward a non-deduped decision to that target thread with Codex thread tooling such as `send_message_to_thread`.
 
 ## Selective Compilation
 
