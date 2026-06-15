@@ -2,13 +2,11 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"mime"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -43,15 +41,16 @@ func runSend(args []string) {
 		os.Exit(1)
 	}
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", sockPath)
-			},
-		},
-	}
+	token := loadLocalAPIToken(localAPIOptions{DataDir: dataDir})
+	client := localAPIClient(sockPath, token)
 
-	resp, err := client.Post("http://unix/send", "application/json", bytes.NewReader(payload))
+	httpReq, err := http.NewRequest(http.MethodPost, "http://unix/send", bytes.NewReader(payload))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: build request: %v\n", err)
+		os.Exit(1)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to connect: %v\n", err)
 		os.Exit(1)
