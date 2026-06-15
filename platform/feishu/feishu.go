@@ -233,7 +233,7 @@ func buildDecisionCard(dec core.Decision) *core.Card {
 			btnType = "primary"
 		}
 		buttons = append(buttons, core.CardButton{
-			Text:  choice,
+			Text:  decisionChoiceLabel(choice),
 			Type:  btnType,
 			Value: "decision:respond",
 			Extra: map[string]string{
@@ -244,6 +244,21 @@ func buildDecisionCard(dec core.Decision) *core.Card {
 	}
 	b.ButtonsEqual(buttons...)
 	return b.Build()
+}
+
+func decisionChoiceLabel(choice string) string {
+	switch strings.ToLower(strings.TrimSpace(choice)) {
+	case "continue":
+		return "继续"
+	case "pause":
+		return "暂停"
+	case "revise":
+		return "调整"
+	case "abort":
+		return "终止"
+	default:
+		return choice
+	}
 }
 
 func singleAllowFromUser(allowFrom string) string {
