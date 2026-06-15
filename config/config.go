@@ -109,6 +109,8 @@ type Config struct {
 	Webhook            WebhookConfig           `toml:"webhook"`
 	Bridge             BridgeConfig            `toml:"bridge"`
 	Management         ManagementConfig        `toml:"management"`
+	Notify             NotifyConfig            `toml:"notify"`
+	Watchdog           WatchdogConfig          `toml:"watchdog"`
 	Hooks              []HookConfig            `toml:"hooks"`
 	IdleTimeoutMins    *int                    `toml:"idle_timeout_mins,omitempty"`  // max minutes between consecutive agent events; 0 = no timeout; default 120
 	MaxTurnTimeMins    *int                    `toml:"max_turn_time_mins,omitempty"` // absolute wall-clock cap per turn in minutes; 0 = disabled (default)
@@ -165,6 +167,20 @@ type ManagementConfig struct {
 	Port        int      `toml:"port,omitempty"`         // listen port; default 9820
 	Token       string   `toml:"token,omitempty"`        // shared secret for authentication; required
 	CORSOrigins []string `toml:"cors_origins,omitempty"` // allowed CORS origins; empty = no CORS
+}
+
+type NotifyConfig struct {
+	Feishu FeishuNotifyConfig `toml:"feishu"`
+}
+
+type FeishuNotifyConfig struct {
+	DefaultUserID string `toml:"default_user_id,omitempty"`
+}
+
+type WatchdogConfig struct {
+	Enabled              *bool `toml:"enabled,omitempty"`
+	LongTaskNotifyMins   int   `toml:"long_task_notify_mins,omitempty"`
+	DecisionReminderMins int   `toml:"decision_reminder_mins,omitempty"`
 }
 
 // Display mode constants.

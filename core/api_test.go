@@ -2,13 +2,25 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
 )
+
+type stubDecisionNotifier struct {
+	sent []Decision
+	err  error
+}
+
+func (s *stubDecisionNotifier) SendDecisionRequest(_ context.Context, dec Decision) error {
+	s.sent = append(s.sent, dec)
+	return s.err
+}
 
 func TestHandleSend_AllowsAttachmentOnly(t *testing.T) {
 	engine := NewEngine("test", &stubAgent{}, []Platform{&stubMediaPlatform{stubPlatformEngine: stubPlatformEngine{n: "test"}}}, "", LangEnglish)
@@ -38,6 +50,125 @@ func TestHandleSend_AllowsAttachmentOnly(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDecisionAPIAskRespondAndGet(t *testing.T) {
+	notifier := &stubDecisionNotifier{}
+	api := &APIServer{decisions: NewDecisionStore()}
+	api.SetDecisionNotifier(notifier)
+
+	body := strings.NewReader(`{"title":"Need confirmation","message":"Proceed?","choices":["continue","abort"],"timeout_mins":1}`)
+	rec := httptest.NewRecorder()
+	api.handleDecisionAsk(rec, httptest.NewRequest(http.MethodPost, "/decision/ask", body))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ask status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	var dec Decision
+	if err := json.Unmarshal(rec.Body.Bytes(), &dec); err != nil {
+		t.Fatalf("decode ask: %v", err)
+	}
+	if dec.ID == "" || len(notifier.sent) != 1 {
+		t.Fatalf("decision ID = %q sent=%d", dec.ID, len(notifier.sent))
+	}
+
+	respBody := strings.NewReader(`{"decision_id":"` + dec.ID + `","choice":"continue","comment":"ok"}`)
+	rec = httptest.NewRecorder()
+	api.handleDecisionRespond(rec, httptest.NewRequest(http.MethodPost, "/decision/respond", respBody))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("respond status = %d body=%s", rec.Code, rec.Body.String())
+	}
+
+	rec = httptest.NewRecorder()
+	api.handleDecisionGet(rec, httptest.NewRequest(http.MethodGet, "/decision/get?id="+dec.ID, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"choice":"continue"`) || !strings.Contains(rec.Body.String(), `"comment":"ok"`) {
+		t.Fatalf("get body missing response: %s", rec.Body.String())
+	}
+}
+
+func TestDecisionAPIAskRollsBackWithoutNotifier(t *testing.T) {
+	api := &APIServer{decisions: NewDecisionStore()}
+	body := strings.NewReader(`{"title":"Need confirmation","message":"Proceed?","choices":["continue"],"timeout_mins":1}`)
+	rec := httptest.NewRecorder()
+	api.handleDecisionAsk(rec, httptest.NewRequest(http.MethodPost, "/decision/ask", body))
+	if rec.Code != http.StatusFailedDependency {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := len(api.decisionStore().entries); got != 0 {
+		t.Fatalf("decision entries = %d, want rollback to empty", got)
+	}
+}
+
+func TestDecisionAPIAskRollsBackWhenNotifierFails(t *testing.T) {
+	api := &APIServer{decisions: NewDecisionStore()}
+	api.SetDecisionNotifier(&stubDecisionNotifier{err: errors.New("send failed")})
+	body := strings.NewReader(`{"title":"Need confirmation","message":"Proceed?","choices":["continue"],"timeout_mins":1}`)
+	rec := httptest.NewRecorder()
+	api.handleDecisionAsk(rec, httptest.NewRequest(http.MethodPost, "/decision/ask", body))
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if got := len(api.decisionStore().entries); got != 0 {
+		t.Fatalf("decision entries = %d, want rollback to empty", got)
+	}
+}
+
+func TestDecisionAPIRespondErrors(t *testing.T) {
+	api := &APIServer{decisions: NewDecisionStore()}
+	dec, err := api.decisionStore().Create(DecisionAskRequest{Title: "T", Message: "M", Choices: []string{"yes"}, Timeout: time.Minute})
+	if err != nil {
+		t.Fatalf("Create error = %v", err)
+	}
+	cases := []struct {
+		name string
+		body string
+		want int
+	}{
+		{name: "empty decision id", body: `{"choice":"yes"}`, want: http.StatusBadRequest},
+		{name: "not found", body: `{"decision_id":"dec_missing","choice":"yes"}`, want: http.StatusNotFound},
+		{name: "invalid choice", body: `{"decision_id":"` + dec.ID + `","choice":"no"}`, want: http.StatusBadRequest},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			api.handleDecisionRespond(rec, httptest.NewRequest(http.MethodPost, "/decision/respond", strings.NewReader(tc.body)))
+			if rec.Code != tc.want {
+				t.Fatalf("status = %d body=%s want=%d", rec.Code, rec.Body.String(), tc.want)
+			}
+		})
+	}
+	rec := httptest.NewRecorder()
+	api.handleDecisionRespond(rec, httptest.NewRequest(http.MethodPost, "/decision/respond", strings.NewReader(`{"decision_id":"`+dec.ID+`","choice":"yes"}`)))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("first respond status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	rec = httptest.NewRecorder()
+	api.handleDecisionRespond(rec, httptest.NewRequest(http.MethodPost, "/decision/respond", strings.NewReader(`{"decision_id":"`+dec.ID+`","choice":"yes"}`)))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("duplicate status = %d body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDecisionAPIGetExpiredReturnsGoneAndDeletes(t *testing.T) {
+	store := NewDecisionStore()
+	now := time.Now()
+	store.now = func() time.Time { return now }
+	api := &APIServer{decisions: store}
+	dec, err := store.Create(DecisionAskRequest{Title: "T", Message: "M", Choices: []string{"yes"}, Timeout: time.Minute})
+	if err != nil {
+		t.Fatalf("Create error = %v", err)
+	}
+	now = dec.ExpiresAt
+	rec := httptest.NewRecorder()
+	api.handleDecisionGet(rec, httptest.NewRequest(http.MethodGet, "/decision/get?id="+dec.ID, nil))
+	if rec.Code != http.StatusGone {
+		t.Fatalf("status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if _, ok := store.Get(dec.ID); ok {
+		t.Fatal("expired decision still exists")
 	}
 }
 

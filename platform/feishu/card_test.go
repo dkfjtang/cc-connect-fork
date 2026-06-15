@@ -80,6 +80,24 @@ func TestRenderCardMap_EqualColumnsActionsUseColumnSet(t *testing.T) {
 	}
 }
 
+func TestBuildDecisionCardPayload(t *testing.T) {
+	dec := core.Decision{
+		ID:          "dec_123",
+		Title:       "需要确认",
+		Message:     "是否继续？",
+		Choices:     []string{"continue", "abort"},
+		Recommended: "continue",
+	}
+	rendered := renderCardMap(buildDecisionCard(dec), "")
+	b, _ := json.Marshal(rendered)
+	s := string(b)
+	for _, want := range []string{"dec_123", "decision:respond", "continue", "abort", "decision_id", "decision_choice", "form", "decision_form", "form_action_type", "submit", "input", "decision_comment"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("rendered card missing %q: %s", want, s)
+		}
+	}
+}
+
 func TestRenderCardMap_TwoEqualColumnsUseBisectAndCenteredButtons(t *testing.T) {
 	buttons := []core.CardButton{
 		core.PrimaryBtn("Session Management", "nav:/help session"),

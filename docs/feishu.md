@@ -122,6 +122,44 @@ app_secret = "QhkMpxxxxxxxxxxxxxxxxxxxx"
 
 ---
 
+## 个人决策请求
+
+如果你在本机运行 Codex、Claude Code 等长任务，不想一直守在电脑前，可以让任务在需要确认时调用 cc-connect，主动向你的飞书私聊发送决策卡片。
+
+先配置默认接收人，使用 `/whoami` 或 `/status` 中看到的 `ou_xxx`：
+
+```toml
+[notify.feishu]
+default_user_id = "ou_xxx"
+```
+
+然后在本机会话中执行：
+
+```bash
+cc-connect decision ask \
+  --title "需要确认" \
+  --message "测试失败，是否继续按当前方案修复？" \
+  --choices "continue,abort,revise" \
+  --recommended continue \
+  --timeout-mins 30 \
+  --wait
+```
+
+飞书会收到带文本框和按钮的卡片。填写可选说明并点击按钮后，命令会输出：
+
+```text
+choice=continue
+comment=继续，先不要改生产配置
+```
+
+说明：
+
+- `--wait` 会阻塞当前命令，直到飞书侧完成选择或超时。
+- 默认超时是 30 分钟；超时后服务端会拒绝新的响应。
+- 当前阶段只实现显式决策请求；自动长任务状态提醒属于后续能力。
+
+---
+
 ## 第三步：配置应用能力
 
 ### 3.1 启用机器人能力

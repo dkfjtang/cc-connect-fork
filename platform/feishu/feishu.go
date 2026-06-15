@@ -125,29 +125,31 @@ type Platform struct {
 	doneEmoji                  string
 	allowFrom                  string
 	allowChat                  string
+	notifyUserID               string
 	groupOnly                  bool
 	groupReplyAll              bool
 	respondToAtEveryoneAndHere bool
 	shareSessionInChannel      bool
 	threadIsolation            bool
 	// noReplyToTrigger: when true, send via Create instead of Im.Message.Reply (no quote to the user's message).
-	noReplyToTrigger bool
-	resolveMentions  bool
-	client           *lark.Client
-	replayClient     *lark.Client
-	replayClientMu   sync.Mutex
-	wsClient         *larkws.Client
-	handler          core.MessageHandler
-	cardNavHandler   core.CardNavigationHandler
-	cancel           context.CancelFunc
-	dedup            *core.MessageDedup
-	botOpenID        string
-	peerBots         map[string]string // app_id -> friendly alias, for quoted-reply attribution
-	userNameCache    sync.Map          // open_id -> display name
-	chatNameCache    sync.Map          // chat_id -> chat name
-	chatMemberCache  sync.Map          // chatID -> *chatMemberEntry
-	recalledMu       sync.Mutex
-	recalledMsgIDs   map[string]time.Time // message_id -> recall time, short TTL race guard
+	noReplyToTrigger  bool
+	resolveMentions   bool
+	client            *lark.Client
+	replayClient      *lark.Client
+	replayClientMu    sync.Mutex
+	wsClient          *larkws.Client
+	handler           core.MessageHandler
+	cardNavHandler    core.CardNavigationHandler
+	decisionResponder func(context.Context, core.DecisionResponse) error
+	cancel            context.CancelFunc
+	dedup             *core.MessageDedup
+	botOpenID         string
+	peerBots          map[string]string // app_id -> friendly alias, for quoted-reply attribution
+	userNameCache     sync.Map          // open_id -> display name
+	chatNameCache     sync.Map          // chat_id -> chat name
+	chatMemberCache   sync.Map          // chatID -> *chatMemberEntry
+	recalledMu        sync.Mutex
+	recalledMsgIDs    map[string]time.Time // message_id -> recall time, short TTL race guard
 	// Webhook mode fields (for Lark international version)
 	server       *http.Server
 	port         string
@@ -189,6 +191,105 @@ func (p *Platform) SetCardNavigationHandler(h core.CardNavigationHandler) {
 	p.cardNavHandler = h
 }
 
+func (p *Platform) SetDecisionResponder(fn func(context.Context, core.DecisionResponse) error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.decisionResponder = fn
+}
+
+func (p *Platform) getDecisionResponder() func(context.Context, core.DecisionResponse) error {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.decisionResponder
+}
+
+func (p *Platform) SendDecisionRequest(ctx context.Context, dec core.Decision) error {
+	if !p.useInteractiveCard {
+		return fmt.Errorf("%s: decision requests require enable_feishu_card=true", p.tag())
+	}
+	userID := strings.TrimSpace(p.notifyUserID)
+	if userID == "" {
+		userID = singleAllowFromUser(p.allowFrom)
+	}
+	if userID == "" {
+		return fmt.Errorf("%s: notify user is not configured", p.tag())
+	}
+	cardJSON := renderCard(buildDecisionCard(dec), "")
+	return p.createUserMessage(ctx, userID, larkim.MsgTypeInteractive, cardJSON, "send decision card")
+}
+
+func (p *Platform) SupportsDecisionRequests() bool {
+	return p.useInteractiveCard
+}
+
+func buildDecisionCard(dec core.Decision) *core.Card {
+	b := core.NewCard().Title(dec.Title, "orange").Markdown(dec.Message).Divider()
+	b.Markdown("选择一个操作继续；如需补充说明，可先填写下方文本。")
+	b.Input("decision_comment", "补充说明（可选）")
+	buttons := make([]core.CardButton, 0, len(dec.Choices))
+	for _, choice := range dec.Choices {
+		btnType := "default"
+		if choice == dec.Recommended {
+			btnType = "primary"
+		}
+		buttons = append(buttons, core.CardButton{
+			Text:  choice,
+			Type:  btnType,
+			Value: "decision:respond",
+			Extra: map[string]string{
+				"decision_id":     dec.ID,
+				"decision_choice": choice,
+			},
+		})
+	}
+	b.ButtonsEqual(buttons...)
+	return b.Build()
+}
+
+func singleAllowFromUser(allowFrom string) string {
+	var one string
+	for _, part := range strings.Split(allowFrom, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "*" {
+			continue
+		}
+		if one != "" {
+			return ""
+		}
+		one = part
+	}
+	return one
+}
+
+func decisionCommentFromAction(formValue map[string]any) string {
+	if len(formValue) == 0 {
+		return ""
+	}
+	return stringFromFormValue(formValue["decision_comment"])
+}
+
+func stringFromFormValue(v any) string {
+	switch x := v.(type) {
+	case string:
+		return strings.TrimSpace(x)
+	case map[string]any:
+		for _, key := range []string{"value", "text", "content"} {
+			if s, ok := x[key].(string); ok {
+				return strings.TrimSpace(s)
+			}
+		}
+	case []any:
+		parts := make([]string, 0, len(x))
+		for _, item := range x {
+			if s := stringFromFormValue(item); s != "" {
+				parts = append(parts, s)
+			}
+		}
+		return strings.TrimSpace(strings.Join(parts, " "))
+	}
+	return ""
+}
+
 func New(opts map[string]any) (core.Platform, error) {
 	return newPlatform("feishu", lark.FeishuBaseUrl, opts)
 }
@@ -222,6 +323,10 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 	allowFrom, _ := opts["allow_from"].(string)
 	core.CheckAllowFrom(name, allowFrom)
 	allowChat, _ := opts["allow_chat"].(string)
+	notifyUserID, _ := opts["notify_user_id"].(string)
+	if strings.TrimSpace(notifyUserID) == "" {
+		notifyUserID, _ = opts["default_user_id"].(string)
+	}
 	groupOnly, _ := opts["group_only"].(bool)
 	groupReplyAll, _ := opts["group_reply_all"].(bool)
 	// require_mention = false is equivalent to group_reply_all = true:
@@ -290,6 +395,7 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 		doneEmoji:                  doneEmoji,
 		allowFrom:                  allowFrom,
 		allowChat:                  allowChat,
+		notifyUserID:               strings.TrimSpace(notifyUserID),
 		groupOnly:                  groupOnly,
 		groupReplyAll:              groupReplyAll,
 		respondToAtEveryoneAndHere: respondToAtEveryoneAndHere,
@@ -553,13 +659,6 @@ func (p *Platform) onCardAction(event *callback.CardActionTriggerEvent) (*callba
 		return nil, nil
 	}
 
-	// Check allow_chat filter: skip card actions from chats this platform doesn't own.
-	if event.Event.Context != nil && event.Event.Context.OpenChatID != "" {
-		if !core.AllowList(p.allowChat, event.Event.Context.OpenChatID) {
-			return nil, nil
-		}
-	}
-
 	actionVal, _ := event.Event.Action.Value["action"].(string)
 
 	// select_static callbacks put the chosen value in event.Event.Action.Option
@@ -572,6 +671,19 @@ func (p *Platform) onCardAction(event *callback.CardActionTriggerEvent) (*callba
 			actionVal = "act:/delete-mode form-submit"
 		case "delete_mode_cancel":
 			actionVal = "act:/delete-mode cancel"
+		}
+		if actionVal == "" && strings.HasPrefix(event.Event.Action.Name, "decision_submit:") {
+			actionVal = "decision:respond"
+		}
+	}
+
+	// Check allow_chat filter: skip ordinary card actions from chats this
+	// platform doesn't own. Personal decision cards are sent by open_id and may
+	// arrive from a p2p chat not present in allow_chat, so they authorize by
+	// operator instead of chat.
+	if actionVal != "decision:respond" && event.Event.Context != nil && event.Event.Context.OpenChatID != "" {
+		if !core.AllowList(p.allowChat, event.Event.Context.OpenChatID) {
+			return nil, nil
 		}
 	}
 	if actionVal == "act:/delete-mode form-submit" {
@@ -658,6 +770,38 @@ func (p *Platform) onCardAction(event *callback.CardActionTriggerEvent) (*callba
 		}
 		slog.Warn(p.tag()+": card nav returned nil, ignoring", "action", actionVal)
 		return nil, nil
+	}
+
+	if actionVal == "decision:respond" {
+		decisionResponder := p.getDecisionResponder()
+		if decisionResponder == nil {
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "error", Content: "Decision responder is not configured"},
+			}, nil
+		}
+		decisionID, choice := decisionResponseFromAction(event.Event.Action.Name, event.Event.Action.Value)
+		comment := decisionCommentFromAction(event.Event.Action.FormValue)
+		if comment == "" {
+			comment, _ = event.Event.Action.Value["decision_comment"].(string)
+		}
+		if !p.allowDecisionOperator(userID) {
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "error", Content: "Decision response is not allowed for this user"},
+			}, nil
+		}
+		err := decisionResponder(context.Background(), core.DecisionResponse{
+			DecisionID: decisionID,
+			Choice:     choice,
+			Comment:    comment,
+		})
+		if err != nil {
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "error", Content: err.Error()},
+			}, nil
+		}
+		return &callback.CardActionTriggerResponse{
+			Toast: &callback.Toast{Type: "success", Content: "Decision received"},
+		}, nil
 	}
 
 	// perm: — permission response with in-place card update
@@ -803,6 +947,40 @@ func (p *Platform) removeReaction(messageID, reactionID string) {
 	if !resp.Success() {
 		slog.Debug(p.tag()+": remove reaction failed", "code", resp.Code, "msg", resp.Msg)
 	}
+}
+
+func (p *Platform) allowDecisionOperator(userID string) bool {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return false
+	}
+	notifyUserID := strings.TrimSpace(p.notifyUserID)
+	if notifyUserID != "" {
+		return userID == notifyUserID
+	}
+	return core.AllowList(p.allowFrom, userID)
+}
+
+func decisionResponseFromAction(name string, value map[string]any) (string, string) {
+	decisionID, _ := value["decision_id"].(string)
+	choice, _ := value["decision_choice"].(string)
+	if decisionID != "" && choice != "" {
+		return decisionID, choice
+	}
+	if !strings.HasPrefix(name, "decision_submit:") {
+		return decisionID, choice
+	}
+	parts := strings.SplitN(strings.TrimPrefix(name, "decision_submit:"), ":", 2)
+	if len(parts) != 2 {
+		return decisionID, choice
+	}
+	if decodedID, err := url.QueryUnescape(parts[0]); err == nil && decodedID != "" {
+		decisionID = decodedID
+	}
+	if decodedChoice, err := url.QueryUnescape(parts[1]); err == nil && decodedChoice != "" {
+		choice = decodedChoice
+	}
+	return decisionID, choice
 }
 
 // StartTyping adds an emoji reaction to the user's message and returns a stop
@@ -3128,6 +3306,29 @@ func (p *Platform) createMessage(ctx context.Context, chatID, msgType, content, 
 		ReceiveIdType(larkim.ReceiveIdTypeChatId).
 		Body(larkim.NewCreateMessageReqBodyBuilder().
 			ReceiveId(chatID).
+			MsgType(msgType).
+			Content(content).
+			Build()).
+		Build()
+	return p.withTransientRetry(ctx, op, func() error {
+		return p.withFreshTenantAccessTokenRetry(ctx, op, func(client *lark.Client, options ...larkcore.RequestOptionFunc) error {
+			resp, err := client.Im.Message.Create(ctx, req, options...)
+			if err != nil {
+				return fmt.Errorf("%s: %s api call: %w", p.tag(), op, err)
+			}
+			if !resp.Success() {
+				return fmt.Errorf("%s: %s failed code=%d msg=%s", p.tag(), op, resp.Code, resp.Msg)
+			}
+			return nil
+		})
+	})
+}
+
+func (p *Platform) createUserMessage(ctx context.Context, userID, msgType, content, op string) error {
+	req := larkim.NewCreateMessageReqBuilder().
+		ReceiveIdType("open_id").
+		Body(larkim.NewCreateMessageReqBodyBuilder().
+			ReceiveId(userID).
 			MsgType(msgType).
 			Content(content).
 			Build()).

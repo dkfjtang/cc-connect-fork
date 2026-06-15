@@ -143,6 +143,9 @@ func main() {
 		case "send":
 			runSend(os.Args[2:])
 			return
+		case "decision":
+			runDecision(os.Args[2:])
+			return
 		case "cron":
 			runCron(os.Args[2:])
 			return
@@ -279,6 +282,8 @@ func main() {
 	}
 
 	engines := make([]*core.Engine, 0, len(cfg.Projects))
+	effectiveProjects := make([]config.ProjectConfig, 0, len(cfg.Projects))
+	projectPlatforms := make([][]core.Platform, 0, len(cfg.Projects))
 	effectiveWorkDirs := make([]string, 0, len(cfg.Projects))
 
 	for _, proj := range cfg.Projects {
@@ -308,6 +313,11 @@ func main() {
 			for k, v := range pc.Options {
 				opts[k] = v
 			}
+			if (pc.Type == "feishu" || pc.Type == "lark") && cfg.Notify.Feishu.DefaultUserID != "" {
+				if _, exists := opts["notify_user_id"]; !exists {
+					opts["notify_user_id"] = cfg.Notify.Feishu.DefaultUserID
+				}
+			}
 			opts["cc_data_dir"] = cfg.DataDir
 			opts["cc_project"] = proj.Name
 			p, err := core.CreatePlatform(pc.Type, opts)
@@ -317,7 +327,6 @@ func main() {
 			}
 			platforms = append(platforms, p)
 		}
-
 		workDir, _ := proj.Agent.Options["work_dir"].(string)
 		projectState := core.NewProjectStateStore(projectStatePath(cfg.DataDir, proj.Name))
 		effectiveWorkDir := applyProjectStateOverride(proj.Name, agent, workDir, projectState)
@@ -852,6 +861,8 @@ func main() {
 		})
 
 		engines = append(engines, engine)
+		effectiveProjects = append(effectiveProjects, proj)
+		projectPlatforms = append(projectPlatforms, platforms)
 		effectiveWorkDirs = append(effectiveWorkDirs, effectiveWorkDir)
 	}
 
@@ -870,19 +881,31 @@ func main() {
 			cronSched.SetDefaultSessionMode(cfg.Cron.SessionMode)
 		}
 		for i, e := range engines {
-			cronSched.RegisterEngine(cfg.Projects[i].Name, e)
+			cronSched.RegisterEngine(effectiveProjects[i].Name, e)
 			e.SetCronScheduler(cronSched)
 		}
 	}
 
 	// Start heartbeat scheduler
 	heartbeatSched := core.NewHeartbeatScheduler(cfg.DataDir)
-	for i, proj := range cfg.Projects {
+	for i, proj := range effectiveProjects {
 		hbCfg := buildHeartbeatConfig(proj.Heartbeat)
 		if hbCfg.Enabled {
 			heartbeatSched.Register(proj.Name, hbCfg, engines[i], effectiveWorkDirs[i])
 		}
 		engines[i].SetHeartbeatScheduler(heartbeatSched)
+	}
+
+	// Create the internal API server before platforms start so decision card
+	// callbacks cannot race with DecisionResponder wiring during startup.
+	var apiSrv *core.APIServer
+	apiSrv, err = core.NewAPIServer(cfg.DataDir)
+	if err != nil {
+		slog.Warn("api server unavailable", "error", err)
+	} else {
+		for i := range engines {
+			wireDecisionPlatforms(apiSrv, projectPlatforms[i])
+		}
 	}
 
 	var startErrors []error
@@ -929,8 +952,8 @@ func main() {
 			os.Exit(1)
 		}
 		for i, e := range engines {
-			bp := bridgeSrv.NewPlatform(cfg.Projects[i].Name)
-			bridgeSrv.RegisterEngine(cfg.Projects[i].Name, e, bp)
+			bp := bridgeSrv.NewPlatform(effectiveProjects[i].Name)
+			bridgeSrv.RegisterEngine(effectiveProjects[i].Name, e, bp)
 			e.AddPlatform(bp)
 		}
 		bridgeSrv.Start()
@@ -949,7 +972,7 @@ func main() {
 		}
 		webhookSrv = core.NewWebhookServer(port, cfg.Webhook.Token, path)
 		for i, e := range engines {
-			webhookSrv.RegisterEngine(cfg.Projects[i].Name, e)
+			webhookSrv.RegisterEngine(effectiveProjects[i].Name, e)
 		}
 		webhookSrv.Start()
 	}
@@ -963,7 +986,7 @@ func main() {
 		}
 		mgmtSrv = core.NewManagementServer(port, cfg.Management.Token, cfg.Management.CORSOrigins)
 		for i, e := range engines {
-			mgmtSrv.RegisterEngine(cfg.Projects[i].Name, e)
+			mgmtSrv.RegisterEngine(effectiveProjects[i].Name, e)
 		}
 		if cronSched != nil {
 			mgmtSrv.SetCronScheduler(cronSched)
@@ -1117,10 +1140,7 @@ func main() {
 	}
 
 	// Start internal API server for CLI send
-	apiSrv, err := core.NewAPIServer(cfg.DataDir)
-	if err != nil {
-		slog.Warn("api server unavailable", "error", err)
-	} else {
+	if apiSrv != nil {
 		relayMgr := core.NewRelayManager(cfg.DataDir)
 		if cfg.Relay.TimeoutSecs != nil {
 			secs := *cfg.Relay.TimeoutSecs
@@ -1137,14 +1157,14 @@ func main() {
 		dirHistory := core.NewDirHistory(cfg.DataDir)
 
 		for i, e := range engines {
-			apiSrv.RegisterEngine(cfg.Projects[i].Name, e)
+			apiSrv.RegisterEngine(effectiveProjects[i].Name, e)
 			e.SetRelayManager(relayMgr)
 			e.SetDirHistory(dirHistory)
 
 			// Ensure initial work_dir is in history
 			if initWorkDir := effectiveWorkDirs[i]; initWorkDir != "" {
-				if !dirHistory.Contains(cfg.Projects[i].Name, initWorkDir) {
-					dirHistory.Add(cfg.Projects[i].Name, initWorkDir)
+				if !dirHistory.Contains(effectiveProjects[i].Name, initWorkDir) {
+					dirHistory.Add(effectiveProjects[i].Name, initWorkDir)
 				}
 			}
 		}
@@ -1481,6 +1501,20 @@ Examples:
   cc-connect config example > c.toml  Save example config to a file
 
 `, v, updateHint)
+}
+
+func wireDecisionPlatforms(apiSrv *core.APIServer, platforms []core.Platform) {
+	for _, p := range platforms {
+		if dr, ok := p.(core.DecisionResponder); ok {
+			dr.SetDecisionResponder(apiSrv.ResolveDecision)
+		}
+		if cap, ok := p.(core.DecisionRequestCapability); ok && !cap.SupportsDecisionRequests() {
+			continue
+		}
+		if n, ok := p.(core.DecisionNotifier); ok && !apiSrv.DecisionNotifierConfigured() {
+			apiSrv.SetDecisionNotifier(n)
+		}
+	}
 }
 
 func setupLogger(level string, w io.Writer) {

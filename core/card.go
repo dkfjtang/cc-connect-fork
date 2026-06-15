@@ -62,6 +62,12 @@ type CardSelect struct {
 	InitValue   string // pre-selected option value (empty = none)
 }
 
+// CardInput renders a single-line text input where supported.
+type CardInput struct {
+	Name        string
+	Placeholder string
+}
+
 // CardSelectOption is one item in a CardSelect dropdown.
 type CardSelectOption struct {
 	Text  string
@@ -74,6 +80,7 @@ func (CardActions) cardElement()  {}
 func (CardNote) cardElement()     {}
 func (CardListItem) cardElement() {}
 func (CardSelect) cardElement()   {}
+func (CardInput) cardElement()    {}
 
 // CardButton represents a clickable button inside a CardActions element.
 type CardButton struct {
@@ -196,6 +203,14 @@ func (b *CardBuilder) Select(placeholder string, options []CardSelectOption, ini
 		b.card.Elements = append(b.card.Elements, CardSelect{
 			Placeholder: placeholder, Options: options, InitValue: initValue,
 		})
+	}
+	return b
+}
+
+// Input appends a text input element.
+func (b *CardBuilder) Input(name, placeholder string) *CardBuilder {
+	if name != "" {
+		b.card.Elements = append(b.card.Elements, CardInput{Name: name, Placeholder: placeholder})
 	}
 	return b
 }

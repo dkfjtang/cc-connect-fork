@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -17,14 +19,16 @@ import (
 // APIServer exposes a local Unix socket API for external tools (e.g. cron jobs)
 // to send messages to active sessions.
 type APIServer struct {
-	socketPath string
-	listener   net.Listener
-	server     *http.Server
-	mux        *http.ServeMux
-	engines    map[string]*Engine // project name → engine
-	cron       *CronScheduler
-	relay      *RelayManager
-	mu         sync.RWMutex
+	socketPath       string
+	listener         net.Listener
+	server           *http.Server
+	mux              *http.ServeMux
+	engines          map[string]*Engine // project name → engine
+	cron             *CronScheduler
+	relay            *RelayManager
+	decisions        *DecisionStore
+	decisionNotifier DecisionNotifier
+	mu               sync.RWMutex
 }
 
 // SendRequest is the JSON body for POST /send.
@@ -63,6 +67,7 @@ func NewAPIServer(dataDir string) (*APIServer, error) {
 		listener:   listener,
 		mux:        http.NewServeMux(),
 		engines:    make(map[string]*Engine),
+		decisions:  NewDecisionStore(),
 	}
 	s.mux.HandleFunc("/send", s.handleSend)
 	s.mux.HandleFunc("/sessions", s.handleSessions)
@@ -76,6 +81,9 @@ func NewAPIServer(dataDir string) (*APIServer, error) {
 	s.mux.HandleFunc("/relay/send", s.handleRelaySend)
 	s.mux.HandleFunc("/relay/bind", s.handleRelayBind)
 	s.mux.HandleFunc("/relay/binding", s.handleRelayBinding)
+	s.mux.HandleFunc("/decision/ask", s.handleDecisionAsk)
+	s.mux.HandleFunc("/decision/respond", s.handleDecisionRespond)
+	s.mux.HandleFunc("/decision/get", s.handleDecisionGet)
 
 	return s, nil
 }
@@ -103,6 +111,37 @@ func (s *APIServer) RelayManager() *RelayManager {
 
 func (s *APIServer) SetCronScheduler(cs *CronScheduler) {
 	s.cron = cs
+}
+
+func (s *APIServer) SetDecisionNotifier(n DecisionNotifier) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.decisionNotifier = n
+}
+
+// DecisionNotifierConfigured reports whether the personal-decision MVP has a
+// single default notifier. Project/target routing is intentionally left for a
+// later multi-recipient phase.
+func (s *APIServer) DecisionNotifierConfigured() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.decisionNotifier != nil
+}
+
+func (s *APIServer) ResolveDecision(_ context.Context, resp DecisionResponse) error {
+	if resp.DecisionID == "" {
+		return fmt.Errorf("decision_id is required")
+	}
+	return s.decisionStore().Resolve(resp.DecisionID, resp)
+}
+
+func (s *APIServer) decisionStore() *DecisionStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.decisions == nil {
+		s.decisions = NewDecisionStore()
+	}
+	return s.decisions
 }
 
 func (s *APIServer) Start() {
@@ -183,6 +222,89 @@ func (s *APIServer) handleSend(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apiJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *APIServer) handleDecisionAsk(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var req DecisionAskRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	store := s.decisionStore()
+	dec, err := store.Create(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	s.mu.RLock()
+	notifier := s.decisionNotifier
+	s.mu.RUnlock()
+	if notifier == nil {
+		store.Delete(dec.ID)
+		http.Error(w, "decision notifier is not configured", http.StatusFailedDependency)
+		return
+	}
+	if err := notifier.SendDecisionRequest(r.Context(), dec); err != nil {
+		store.Delete(dec.ID)
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	apiJSON(w, http.StatusOK, dec)
+}
+
+func (s *APIServer) handleDecisionRespond(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var resp DecisionResponse
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&resp); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(resp.DecisionID) == "" {
+		http.Error(w, "decision_id is required", http.StatusBadRequest)
+		return
+	}
+	if err := s.decisionStore().Resolve(resp.DecisionID, resp); err != nil {
+		status := http.StatusBadRequest
+		switch {
+		case errors.Is(err, ErrDecisionNotFound):
+			status = http.StatusNotFound
+		case errors.Is(err, ErrDecisionResolved):
+			status = http.StatusConflict
+		}
+		http.Error(w, err.Error(), status)
+		return
+	}
+	apiJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *APIServer) handleDecisionGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	id := strings.TrimSpace(r.URL.Query().Get("id"))
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+	store := s.decisionStore()
+	if _, expired := store.Expire(id); expired {
+		http.Error(w, ErrDecisionTimeout.Error(), http.StatusGone)
+		return
+	}
+	dec, resp, ok := store.Snapshot(id)
+	if !ok {
+		http.Error(w, "decision not found", http.StatusNotFound)
+		return
+	}
+	apiJSON(w, http.StatusOK, map[string]any{"decision": dec, "response": resp})
 }
 
 func (s *APIServer) handleSessions(w http.ResponseWriter, r *http.Request) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"strings"
 
 	"github.com/chenhg5/cc-connect/core"
@@ -113,7 +114,8 @@ func renderCardMap(card *core.Card, sessionKey string) map[string]any {
 	}
 
 	var elements []map[string]any
-	for _, elem := range card.Elements {
+	for i := 0; i < len(card.Elements); i++ {
+		elem := card.Elements[i]
 		switch e := elem.(type) {
 		case core.CardMarkdown:
 			elements = append(elements, map[string]any{
@@ -243,6 +245,19 @@ func renderCardMap(card *core.Card, sessionKey string) map[string]any {
 				"tag":     "action",
 				"actions": []map[string]any{selectElem},
 			})
+		case core.CardInput:
+			if i+1 < len(card.Elements) {
+				if actions, ok := card.Elements[i+1].(core.CardActions); ok && isDecisionActionRow(actions) {
+					elements = append(elements, renderDecisionForm(e, actions, sessionKey))
+					i++
+					continue
+				}
+			}
+			elements = append(elements, map[string]any{
+				"tag":         "input",
+				"name":        e.Name,
+				"placeholder": plainText(e.Placeholder),
+			})
 		case core.CardNote:
 			elements = append(elements, map[string]any{
 				"tag":      "note",
@@ -257,6 +272,78 @@ func renderCardMap(card *core.Card, sessionKey string) map[string]any {
 
 	result["elements"] = elements
 	return result
+}
+
+func isDecisionActionRow(actions core.CardActions) bool {
+	if len(actions.Buttons) == 0 {
+		return false
+	}
+	for _, btn := range actions.Buttons {
+		if btn.Value != "decision:respond" {
+			return false
+		}
+	}
+	return true
+}
+
+func renderDecisionForm(input core.CardInput, actions core.CardActions, sessionKey string) map[string]any {
+	formElements := []map[string]any{
+		{
+			"tag":         "input",
+			"name":        input.Name,
+			"placeholder": plainText(input.Placeholder),
+		},
+	}
+	var columns []map[string]any
+	for _, btn := range actions.Buttons {
+		btnType := btn.Type
+		if btnType == "" {
+			btnType = "default"
+		}
+		valMap := map[string]string{"action": btn.Value}
+		if sessionKey != "" {
+			valMap["session_key"] = sessionKey
+		}
+		for k, v := range btn.Extra {
+			valMap[k] = v
+		}
+		buttonName := "decision_submit"
+		if decID, choice := btn.Extra["decision_id"], btn.Extra["decision_choice"]; decID != "" && choice != "" {
+			buttonName = "decision_submit:" + url.QueryEscape(decID) + ":" + url.QueryEscape(choice)
+		}
+		button := map[string]any{
+			"tag":              "button",
+			"text":             plainText(btn.Text),
+			"type":             btnType,
+			"name":             buttonName,
+			"form_action_type": "submit",
+			"value":            valMap,
+		}
+		if actions.Layout == core.CardActionLayoutEqualColumns {
+			button["width"] = "fill"
+		}
+		columns = append(columns, map[string]any{
+			"tag":              "column",
+			"width":            "weighted",
+			"weight":           1,
+			"vertical_align":   "center",
+			"horizontal_align": "center",
+			"elements":         []map[string]any{button},
+		})
+	}
+	columnSet := map[string]any{
+		"tag":     "column_set",
+		"columns": columns,
+	}
+	if len(columns) == 2 {
+		columnSet["flex_mode"] = "bisect"
+	}
+	formElements = append(formElements, columnSet)
+	return map[string]any{
+		"tag":      "form",
+		"name":     "decision_form",
+		"elements": formElements,
+	}
 }
 
 type deleteModeCheckerRow struct {

@@ -42,6 +42,24 @@ type CronReplyTargetResolver interface {
 	ResolveCronReplyTarget(sessionKey string, title string) (resolvedSessionKey string, replyCtx any, err error)
 }
 
+// DecisionNotifier is implemented by platforms that can proactively deliver a
+// personal decision request outside an existing chat reply context.
+type DecisionNotifier interface {
+	SendDecisionRequest(ctx context.Context, dec Decision) error
+}
+
+// DecisionRequestCapability is implemented by platforms that can opt into the
+// personal-decision MVP notifier wiring.
+type DecisionRequestCapability interface {
+	SupportsDecisionRequests() bool
+}
+
+// DecisionResponder is implemented by platforms that can receive an external
+// decision response and forward it to the local decision store.
+type DecisionResponder interface {
+	SetDecisionResponder(func(context.Context, DecisionResponse) error)
+}
+
 // SessionEnvInjector is an optional interface for agents that accept
 // per-session environment variables (e.g. CC_PROJECT, CC_SESSION_KEY).
 type SessionEnvInjector interface {

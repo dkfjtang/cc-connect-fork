@@ -50,6 +50,60 @@ func (s *stubMainAgentSession) Close() error                                    
 func (s *stubMainAgentSession) CurrentSessionID() string                              { return "" }
 func (s *stubMainAgentSession) Alive() bool                                           { return true }
 
+type decisionWiringPlatform struct {
+	supports  bool
+	notifier  bool
+	responder func(context.Context, core.DecisionResponse) error
+}
+
+func (p *decisionWiringPlatform) Name() string                             { return "decision-wiring" }
+func (p *decisionWiringPlatform) Start(core.MessageHandler) error          { return nil }
+func (p *decisionWiringPlatform) Reply(context.Context, any, string) error { return nil }
+func (p *decisionWiringPlatform) Send(context.Context, any, string) error  { return nil }
+func (p *decisionWiringPlatform) Stop() error                              { return nil }
+func (p *decisionWiringPlatform) SetDecisionResponder(fn func(context.Context, core.DecisionResponse) error) {
+	p.responder = fn
+}
+func (p *decisionWiringPlatform) SendDecisionRequest(context.Context, core.Decision) error {
+	p.notifier = true
+	return nil
+}
+func (p *decisionWiringPlatform) SupportsDecisionRequests() bool { return p.supports }
+
+func TestWireDecisionPlatformsSetsResponderAndFirstNotifier(t *testing.T) {
+	api, err := core.NewAPIServer(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewAPIServer error = %v", err)
+	}
+	defer api.Stop()
+	first := &decisionWiringPlatform{supports: true}
+	second := &decisionWiringPlatform{supports: true}
+	wireDecisionPlatforms(api, []core.Platform{first, second})
+	if first.responder == nil || second.responder == nil {
+		t.Fatalf("responders not wired first=%v second=%v", first.responder != nil, second.responder != nil)
+	}
+	if !api.DecisionNotifierConfigured() {
+		t.Fatal("decision notifier not configured")
+	}
+}
+
+func TestWireDecisionPlatformsSkipsUnsupportedNotifier(t *testing.T) {
+	api, err := core.NewAPIServer(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewAPIServer error = %v", err)
+	}
+	defer api.Stop()
+	unsupported := &decisionWiringPlatform{supports: false}
+	supported := &decisionWiringPlatform{supports: true}
+	wireDecisionPlatforms(api, []core.Platform{unsupported, supported})
+	if !api.DecisionNotifierConfigured() {
+		t.Fatal("decision notifier not configured")
+	}
+	if unsupported.responder == nil || supported.responder == nil {
+		t.Fatal("responders should still be wired for callback handling")
+	}
+}
+
 func TestProjectStatePath(t *testing.T) {
 	dataDir := t.TempDir()
 	got := projectStatePath(dataDir, "my/project:one")

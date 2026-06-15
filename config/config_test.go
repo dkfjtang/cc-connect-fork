@@ -189,6 +189,34 @@ func TestConfigValidate(t *testing.T) {
 	}
 }
 
+func TestNotifyAndWatchdogConfig(t *testing.T) {
+	data := []byte(`
+[notify.feishu]
+default_user_id = "ou_owner"
+
+[watchdog]
+enabled = true
+long_task_notify_mins = 10
+decision_reminder_mins = 20
+`)
+	var cfg Config
+	if err := toml.Unmarshal(data, &cfg); err != nil {
+		t.Fatalf("toml.Unmarshal error = %v", err)
+	}
+	if cfg.Notify.Feishu.DefaultUserID != "ou_owner" {
+		t.Fatalf("DefaultUserID = %q", cfg.Notify.Feishu.DefaultUserID)
+	}
+	if cfg.Watchdog.Enabled == nil || !*cfg.Watchdog.Enabled {
+		t.Fatalf("Watchdog.Enabled = %#v", cfg.Watchdog.Enabled)
+	}
+	if cfg.Watchdog.LongTaskNotifyMins != 10 {
+		t.Fatalf("LongTaskNotifyMins = %d", cfg.Watchdog.LongTaskNotifyMins)
+	}
+	if cfg.Watchdog.DecisionReminderMins != 20 {
+		t.Fatalf("DecisionReminderMins = %d", cfg.Watchdog.DecisionReminderMins)
+	}
+}
+
 func TestRunAsEnv_RejectsDangerousVars(t *testing.T) {
 	dangerous := []string{"PATH", "path", "LD_PRELOAD", "HOME", "USER", "SHELL", "SUDO_USER", "SUDO_COMMAND", "LD_LIBRARY_PATH", "DYLD_INSERT_LIBRARIES"}
 	for _, v := range dangerous {

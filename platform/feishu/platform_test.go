@@ -400,6 +400,174 @@ func TestInteractivePlatform_CardActionFormSubmitPassesSelectedIDs(t *testing.T)
 	}
 }
 
+func TestInteractivePlatform_DecisionCardActionResolvesWithComment(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+
+	gotCh := make(chan core.DecisionResponse, 1)
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+		gotCh <- resp
+		return nil
+	})
+
+	resp, err := ip.onCardAction(&callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				Value: map[string]any{
+					"action":          "decision:respond",
+					"decision_id":     "dec_123",
+					"decision_choice": "continue",
+				},
+				FormValue: map[string]any{"decision_comment": "先不要改生产配置"},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("response = %#v, want success toast", resp)
+	}
+
+	select {
+	case got := <-gotCh:
+		if got.DecisionID != "dec_123" || got.Choice != "continue" || got.Comment != "先不要改生产配置" {
+			t.Fatalf("decision response = %#v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected decision responder call")
+	}
+}
+
+func TestInteractivePlatform_DecisionCardActionNameFallback(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+
+	gotCh := make(chan core.DecisionResponse, 1)
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+		gotCh <- resp
+		return nil
+	})
+
+	resp, err := ip.onCardAction(&callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				Name:      "decision_submit:dec_123:%E7%BB%A7%E7%BB%AD",
+				FormValue: map[string]any{"decision_comment": "ok"},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
+		t.Fatalf("response = %#v, want success toast", resp)
+	}
+
+	select {
+	case got := <-gotCh:
+		if got.DecisionID != "dec_123" || got.Choice != "继续" || got.Comment != "ok" {
+			t.Fatalf("decision response = %#v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected decision responder call")
+	}
+}
+
+func TestNew_DisabledInteractiveCardsRejectDecisionRequest(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": false})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	p, ok := platformAny.(*Platform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *Platform", platformAny)
+	}
+	err = p.SendDecisionRequest(context.Background(), core.Decision{ID: "dec_123", Title: "T", Message: "M", Choices: []string{"yes"}})
+	if err == nil || !strings.Contains(err.Error(), "enable_feishu_card=true") {
+		t.Fatalf("SendDecisionRequest error = %v, want card disabled error", err)
+	}
+}
+
+func TestInteractivePlatform_DecisionCardActionIgnoresAllowChatButChecksOperator(t *testing.T) {
+	platformAny, err := New(map[string]any{
+		"app_id":             "cli_xxx",
+		"app_secret":         "secret",
+		"enable_feishu_card": true,
+		"allow_chat":         "oc_other",
+		"notify_user_id":     "ou_owner",
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+	gotCh := make(chan core.DecisionResponse, 1)
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+		gotCh <- resp
+		return nil
+	})
+
+	_, err = ip.onCardAction(&callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_owner"},
+			Action: &callback.CallBackAction{
+				Name:      "decision_submit:dec_123:yes",
+				FormValue: map[string]any{"decision_comment": "ok"},
+			},
+			Context: &callback.Context{OpenChatID: "oc_unlisted", OpenMessageID: "om_test"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	select {
+	case got := <-gotCh:
+		if got.DecisionID != "dec_123" || got.Choice != "yes" {
+			t.Fatalf("decision response = %#v", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("expected decision responder call")
+	}
+
+	_, err = ip.onCardAction(&callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_other"},
+			Action: &callback.CallBackAction{
+				Name:      "decision_submit:dec_123:yes",
+				FormValue: map[string]any{"decision_comment": "bad"},
+			},
+			Context: &callback.Context{OpenChatID: "oc_unlisted", OpenMessageID: "om_test"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	select {
+	case got := <-gotCh:
+		t.Fatalf("unexpected decision response = %#v", got)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 func TestInteractivePlatform_CardActionFormSubmitUsesActionNameFallback(t *testing.T) {
 	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
 	if err != nil {

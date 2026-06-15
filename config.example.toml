@@ -36,6 +36,22 @@
 # 不带附件的 `cc-connect send --message` 不受影响。
 # attachment_send = "on"
 
+# Personal remote decision prompts for local Codex sessions.
+# The ID should be the same Feishu User ID shown by /whoami or /status and
+# already accepted by allow_from/admin_from in your Feishu platform settings.
+# 本地 Codex 会话无人值守时的个人飞书决策通知目标。
+# 这里填写 /whoami 或 /status 显示、且已能正常交互的飞书 User ID。
+# [notify.feishu]
+# default_user_id = "ou_xxx"
+
+# Watchdog defaults. The first implementation only supports explicit decision
+# prompts; long-task status notifications are planned as a later step.
+# 无人值守默认值。当前先支持显式决策请求，长任务状态通知后续再做。
+# [watchdog]
+# enabled = true
+# long_task_notify_mins = 10
+# decision_reminder_mins = 20
+
 [log]
 level = "info" # debug, info, warn, error
 
