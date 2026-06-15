@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -22,6 +24,8 @@ type APIServer struct {
 	server     *http.Server
 	mux        *http.ServeMux
 	engines    map[string]*Engine // project name → engine
+	decisions  *DecisionStore
+	notifier   DecisionNotifier
 	cron       *CronScheduler
 	relay      *RelayManager
 	mu         sync.RWMutex
@@ -63,9 +67,13 @@ func NewAPIServer(dataDir string) (*APIServer, error) {
 		listener:   listener,
 		mux:        http.NewServeMux(),
 		engines:    make(map[string]*Engine),
+		decisions:  NewDecisionStore(),
 	}
 	s.mux.HandleFunc("/send", s.handleSend)
 	s.mux.HandleFunc("/sessions", s.handleSessions)
+	s.mux.HandleFunc("/decision/ask", s.handleDecisionAsk)
+	s.mux.HandleFunc("/decision/respond", s.handleDecisionRespond)
+	s.mux.HandleFunc("/decision/get", s.handleDecisionGet)
 	s.mux.HandleFunc("/cron/add", s.handleCronAdd)
 	s.mux.HandleFunc("/cron/list", s.handleCronList)
 	s.mux.HandleFunc("/cron/info", s.handleCronInfo)
@@ -103,6 +111,17 @@ func (s *APIServer) RelayManager() *RelayManager {
 
 func (s *APIServer) SetCronScheduler(cs *CronScheduler) {
 	s.cron = cs
+}
+
+func (s *APIServer) SetDecisionNotifier(n DecisionNotifier) {
+	s.notifier = n
+}
+
+func (s *APIServer) ResolveDecision(ctx context.Context, resp DecisionResponse) error {
+	if s.decisions == nil {
+		return ErrDecisionNotFound
+	}
+	return s.decisions.Resolve(resp.DecisionID, resp)
 }
 
 func (s *APIServer) Start() {
@@ -211,6 +230,100 @@ func (s *APIServer) handleSessions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apiJSON(w, http.StatusOK, result)
+}
+
+func (s *APIServer) handleDecisionAsk(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.decisions == nil {
+		http.Error(w, "decision store not available", http.StatusServiceUnavailable)
+		return
+	}
+	var req DecisionAskRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	dec, err := s.decisions.Create(req)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if s.notifier == nil {
+		http.Error(w, "decision notifier not available", http.StatusFailedDependency)
+		return
+	}
+	if err := s.notifier.SendDecisionRequest(r.Context(), dec); err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	apiJSON(w, http.StatusOK, dec)
+}
+
+func (s *APIServer) handleDecisionRespond(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.decisions == nil {
+		http.Error(w, "decision store not available", http.StatusServiceUnavailable)
+		return
+	}
+	var resp DecisionResponse
+	if err := json.NewDecoder(r.Body).Decode(&resp); err != nil {
+		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(resp.DecisionID) == "" {
+		http.Error(w, "decision_id is required", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(resp.Choice) == "" {
+		http.Error(w, "choice is required", http.StatusBadRequest)
+		return
+	}
+	if err := s.ResolveDecision(r.Context(), resp); err != nil {
+		switch {
+		case errors.Is(err, ErrDecisionNotFound):
+			http.Error(w, err.Error(), http.StatusNotFound)
+		case errors.Is(err, ErrDecisionResolved):
+			http.Error(w, err.Error(), http.StatusConflict)
+		case errors.Is(err, ErrDecisionInvalidChoice):
+			http.Error(w, err.Error(), http.StatusBadRequest)
+		default:
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+	apiJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *APIServer) handleDecisionGet(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	if s.decisions == nil {
+		http.Error(w, "decision store not available", http.StatusServiceUnavailable)
+		return
+	}
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+	record, err := s.decisions.Get(id)
+	if err != nil {
+		if errors.Is(err, ErrDecisionNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	apiJSON(w, http.StatusOK, record)
 }
 
 // ── Cron API ───────────────────────────────────────────────────

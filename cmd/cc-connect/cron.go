@@ -593,6 +593,17 @@ func apiPost(sockPath, path string, payload []byte) (*http.Response, error) {
 	return client.Post("http://unix"+path, "application/json", bytes.NewReader(payload))
 }
 
+func apiGet(sockPath, path string) (*http.Response, error) {
+	client := &http.Client{
+		Transport: &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", sockPath)
+			},
+		},
+	}
+	return client.Get("http://unix" + path)
+}
+
 func printCronUsage() {
 	fmt.Println(`Usage: cc-connect cron <command> [options]
 

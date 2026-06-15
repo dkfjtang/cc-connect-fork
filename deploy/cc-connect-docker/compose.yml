@@ -1,0 +1,25 @@
+services:
+  cc-connect:
+    build:
+      context: ../..
+      dockerfile: deploy/cc-connect-docker/Dockerfile
+      args:
+        CODEX_VERSION: "0.137.0"
+        GOPROXY: "https://goproxy.cn,direct"
+        GOSUMDB: "sum.golang.google.cn"
+        NPM_CONFIG_REGISTRY: "https://registry.npmmirror.com"
+        APT_PROXY: "${APT_PROXY:-}"
+    image: cc-connect-codex-feishu:local
+    container_name: cc-connect-codex-feishu
+    restart: unless-stopped
+    working_dir: /workspaces/cc-connect-fork
+    environment:
+      CODEX_HOME: /codex-home
+      HOME: /home/ccconnect
+      TZ: Asia/Shanghai
+    volumes:
+      - ${CC_CONNECT_RUNTIME_DIR}/config:/config
+      - ${CC_CONNECT_RUNTIME_DIR}/data:/data
+      - ${CC_CONNECT_CODEX_HOME}:/codex-home
+      - ${CC_CONNECT_WORKSPACE}:/workspaces/cc-connect-fork
+    command: ["cc-connect", "--config", "/config/config.toml", "--force"]

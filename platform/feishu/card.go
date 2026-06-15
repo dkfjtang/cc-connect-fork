@@ -17,6 +17,36 @@ func plainText(content string) map[string]any {
 	return map[string]any{"tag": "plain_text", "content": content}
 }
 
+func buildDecisionCard(dec core.Decision) *core.Card {
+	title := strings.TrimSpace(dec.Title)
+	if title == "" {
+		title = "Decision required"
+	}
+	cb := core.NewCard().Title(title, "orange")
+	if strings.TrimSpace(dec.Message) != "" {
+		cb.Markdown(dec.Message)
+	}
+	var buttons []core.CardButton
+	for _, choice := range dec.Choices {
+		typ := "default"
+		if strings.EqualFold(choice, dec.Recommended) {
+			typ = "primary"
+		}
+		buttons = append(buttons, core.CardButton{
+			Text:  choice,
+			Type:  typ,
+			Value: "decision:respond",
+			Extra: map[string]string{
+				"decision_id":     dec.ID,
+				"decision_choice": choice,
+			},
+		})
+	}
+	cb.ButtonsEqual(buttons...)
+	cb.TaggedNote("decision-card", "Optional comment")
+	return cb.Build()
+}
+
 // ReplyCard sends a structured card as a reply to the original message.
 func (p *interactivePlatform) ReplyCard(ctx context.Context, rctx any, card *core.Card) error {
 	rc, ok := rctx.(replyContext)
@@ -109,6 +139,9 @@ func renderCardMap(card *core.Card, sessionKey string) map[string]any {
 		}
 	}
 	if transformed, ok := renderDeleteModeCheckerCard(card, result); ok {
+		return transformed
+	}
+	if transformed, ok := renderDecisionCard(card, result); ok {
 		return transformed
 	}
 
@@ -422,6 +455,85 @@ func renderDeleteModeCheckerCard(card *core.Card, base map[string]any) (map[stri
 	}
 
 	base["elements"] = elements
+	return base, true
+}
+
+func renderDecisionCard(card *core.Card, base map[string]any) (map[string]any, bool) {
+	if card == nil {
+		return nil, false
+	}
+	isDecision := false
+	var formElements []map[string]any
+	var buttons []core.CardButton
+	for _, elem := range card.Elements {
+		switch e := elem.(type) {
+		case core.CardNote:
+			if e.Tag == "decision-card" {
+				isDecision = true
+			}
+		case core.CardMarkdown:
+			formElements = append(formElements, map[string]any{
+				"tag":     "markdown",
+				"content": e.Content,
+			})
+		case core.CardActions:
+			buttons = append(buttons, e.Buttons...)
+		case core.CardDivider:
+			formElements = append(formElements, map[string]any{"tag": "hr"})
+		default:
+			return nil, false
+		}
+	}
+	if !isDecision || len(buttons) == 0 {
+		return nil, false
+	}
+
+	formElements = append(formElements, map[string]any{
+		"tag":         "input",
+		"name":        "decision_comment",
+		"placeholder": plainText("Optional comment"),
+	})
+
+	buttonColumns := make([]map[string]any, 0, len(buttons))
+	for i, btn := range buttons {
+		btnType := btn.Type
+		if btnType == "" {
+			btnType = "default"
+		}
+		valMap := map[string]string{"action": btn.Value}
+		for k, v := range btn.Extra {
+			valMap[k] = v
+		}
+		buttonColumns = append(buttonColumns, map[string]any{
+			"tag":            "column",
+			"width":          "weighted",
+			"weight":         1,
+			"vertical_align": "center",
+			"elements": []map[string]any{
+				{
+					"tag":              "button",
+					"text":             plainText(btn.Text),
+					"type":             btnType,
+					"name":             fmt.Sprintf("decision_submit_%d", i),
+					"form_action_type": "submit",
+					"value":            valMap,
+				},
+			},
+		})
+	}
+	formElements = append(formElements, map[string]any{
+		"tag":              "column_set",
+		"horizontal_align": "left",
+		"columns":          buttonColumns,
+	})
+
+	base["elements"] = []map[string]any{
+		{
+			"tag":      "form",
+			"name":     "decision_form",
+			"elements": formElements,
+		},
+	}
 	return base, true
 }
 

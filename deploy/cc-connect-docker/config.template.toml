@@ -1,0 +1,35 @@
+# Runtime-only template for the WSL Docker deployment.
+# Copy/render this file outside the repository before filling Feishu credentials.
+
+data_dir = "/data"
+language = "zh"
+mode = "yolo"
+max_turn_time_mins = 15
+
+[display]
+mode = "full"
+card_mode = "rich"
+thinking_messages = true
+tool_messages = false
+reply_footer = true
+
+[[projects]]
+name = "cc-connect-fork"
+work_dir = "/workspaces/cc-connect-fork"
+
+[projects.agent]
+type = "codex"
+backend = "app_server"
+app_server_url = "stdio://"
+codex_home = "/codex-home"
+
+[[projects.platforms]]
+type = "feishu"
+
+[projects.platforms.options]
+app_id = "${FEISHU_APP_ID}"
+app_secret = "${FEISHU_APP_SECRET}"
+enable_feishu_card = true
+progress_style = "card"
+done_emoji = "none"
+thread_isolation = true

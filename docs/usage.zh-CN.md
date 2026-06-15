@@ -17,6 +17,7 @@ cc-connect 完整功能使用指南。
 - [语音回复（文字转语音）](#语音回复文字转语音)
 - [图片与文件回传](#图片与文件回传)
 - [定时任务 (Cron)](#定时任务-cron)
+- [远程决策](#远程决策)
 - [多机器人中继](#多机器人中继)
 - [守护进程模式](#守护进程模式)
 - [多工作区模式](#多工作区模式)
@@ -711,6 +712,37 @@ cc-connect cron del <job-id>
 > "每天早上6点帮我总结 GitHub trending"
 
 Claude Code 会自动创建定时任务。对依赖记忆文件的其他 Agent，先执行一次 `/cron setup` 或 `/bind setup`，效果相同。
+
+---
+
+## 远程决策
+
+当本地自动化需要先通过飞书私聊确认才能继续时，使用 `cc-connect decision ask`。
+
+```bash
+cc-connect decision ask \
+  --title "需要确认" \
+  --message "构建需要下载依赖，是否继续？" \
+  --choices "continue,abort,revise" \
+  --recommended continue \
+  --wait
+```
+
+带 `--wait` 时，命令会等待飞书决策卡片被处理或超时。输出为便于 Agent 解析的行格式：
+
+```text
+choice=continue
+comment=
+```
+
+个人飞书接收人配置：
+
+```toml
+[notify.feishu]
+default_user_id = "ou_xxx"
+```
+
+当前实现支持按钮选择和卡片内可选评论。等待中的 CLI 会输出 `choice` 和 `comment`。
 
 ---
 

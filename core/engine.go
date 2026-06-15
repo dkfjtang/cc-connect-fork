@@ -3938,6 +3938,9 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 			return richMarkdownResolver.ResolveRichCardMarkdown(e.ctx, markdown, final)
 		}
 		buildResolvedRichCard := func(status CardStatus, title string, steps []ToolStep, markdown string, streaming bool, statusFooter string) string {
+			if strings.TrimSpace(title) == "" {
+				title = e.richCardStatusTitle(status)
+			}
 			return richCardSupporter.BuildRichCard(status, title, steps, resolveRichCardMarkdown(markdown, !streaming), streaming, statusFooter)
 		}
 
@@ -4629,7 +4632,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 					richStatusFooter = formatElapsed(time.Since(turnStart), false, e.i18n.currentLang()) + "\n" + legacyStatusFooter
 				}
 				finalBody := resolveRichCardMarkdown(parts[0], true)
-				finalCard := richCardSupporter.BuildRichCard(CardStatusDone, "", toolSteps, finalBody, false, richStatusFooter)
+				finalCard := richCardSupporter.BuildRichCard(CardStatusDone, e.richCardStatusTitle(CardStatusDone), toolSteps, finalBody, false, richStatusFooter)
 				if cardMessageID != nil {
 					// Forced final flush via cardkit-v1 streaming text update before
 					// flipping status to Done via full-card Patch. The throttle in the
@@ -4659,7 +4662,7 @@ func (e *Engine) processInteractiveEvents(state *interactiveState, session *Sess
 				}
 				for _, overflow := range parts[1:] {
 					overflowBody := resolveRichCardMarkdown(overflow, true)
-					overflowCard := richCardSupporter.BuildRichCard(CardStatusDone, "", nil, overflowBody, false, richStatusFooter)
+					overflowCard := richCardSupporter.BuildRichCard(CardStatusDone, e.richCardStatusTitle(CardStatusDone), nil, overflowBody, false, richStatusFooter)
 					if err := p.Send(e.ctx, replyCtx, overflowCard); err != nil {
 						slog.Error("failed to send overflow rich card", "error", err)
 						return
@@ -6038,15 +6041,22 @@ func (e *Engine) composeRichStatusFooter(streaming bool, turnStart time.Time, ag
 	}
 	var lines []string
 
+	lang := e.i18n.currentLang()
 	// Line 1: elapsed timer (now always the "done" form since streaming branch returned above)
-	lines = append(lines, formatElapsed(time.Since(turnStart), streaming, e.i18n.currentLang()))
+	if lang == LangChinese || lang == LangTraditionalChinese {
+		if line := formatRichChineseElapsedLine(time.Since(turnStart), replyFooterModel(session, agent)); line != "" {
+			lines = append(lines, line)
+		}
+	} else {
+		lines = append(lines, formatElapsed(time.Since(turnStart), streaming, lang))
+	}
 
 	// Line 2: model + effort + token usage detail + ctx %
 	if e.showContextIndicator {
 		usage := replyFooterSessionContextUsage(session)
 		model := replyFooterModel(session, agent)
 		effort := replyFooterReasoningEffort(session, agent)
-		if line := buildClaudeStatusLineFooter(model, effort, usage); line != "" {
+		if line := buildClaudeStatusLineFooter(model, effort, usage, lang); line != "" {
 			lines = append(lines, line)
 		} else if fallback := e.replyFooterUsageText(session, agent); fallback != "" {
 			// fallback for non-claudecode agents that still expose UsageReporter
@@ -6083,7 +6093,10 @@ func (e *Engine) composeRichStatusFooter(streaming bool, turnStart time.Time, ag
 //   - ctx %: UsedTokens / ContextWindow, capped at 100%
 //
 // Returns "" when usage is nil and no model is known.
-func buildClaudeStatusLineFooter(model, effort string, usage *ContextUsage) string {
+func buildClaudeStatusLineFooter(model, effort string, usage *ContextUsage, lang Language) string {
+	if lang == LangChinese || lang == LangTraditionalChinese {
+		return buildChineseStatusLineFooter(model, effort, usage)
+	}
 	var parts []string
 	if model != "" {
 		parts = append(parts, model)
@@ -6123,6 +6136,131 @@ func buildClaudeStatusLineFooter(model, effort string, usage *ContextUsage) stri
 		}
 	}
 	return strings.Join(parts, " · ")
+}
+
+func buildChineseStatusLineFooter(model, effort string, usage *ContextUsage) string {
+	var parts []string
+	if usage != nil {
+		var ioParts []string
+		if usage.InputTokens > 0 {
+			ioParts = append(ioParts, fmt.Sprintf("↑ %s", formatRichTokenCount(usage.InputTokens)))
+		}
+		if usage.OutputTokens > 0 {
+			ioParts = append(ioParts, fmt.Sprintf("↓ %s", formatRichTokenCount(usage.OutputTokens)))
+		}
+		if len(ioParts) > 0 {
+			parts = append(parts, strings.Join(ioParts, " "))
+		}
+
+		if usage.CachedInputTokens > 0 || usage.CacheCreationInputTokens > 0 {
+			totalCache := usage.InputTokens + usage.CachedInputTokens
+			cachePct := 0
+			if totalCache > 0 {
+				cachePct = int(math.Round(float64(usage.CachedInputTokens) * 100 / float64(totalCache)))
+				if cachePct < 0 {
+					cachePct = 0
+				}
+				if cachePct > 100 {
+					cachePct = 100
+				}
+			}
+			parts = append(parts, fmt.Sprintf("缓存 %s/%s (%d%%)",
+				formatRichTokenCount(usage.CachedInputTokens),
+				formatRichTokenCount(usage.CacheCreationInputTokens),
+				cachePct,
+			))
+		}
+		if usage.ContextWindow > 0 {
+			used := usage.UsedTokens
+			if used <= 0 && usage.TotalTokens > 0 {
+				used = usage.TotalTokens
+			}
+			if used > 0 {
+				pct := int(math.Round(float64(used) * 100 / float64(usage.ContextWindow)))
+				if pct > 100 {
+					pct = 100
+				}
+				parts = append(parts, fmt.Sprintf("上下文 %s/%s (%d%%)",
+					formatRichTokenCount(used),
+					formatRichTokenCount(usage.ContextWindow),
+					pct,
+				))
+			}
+		}
+	}
+	return strings.Join(parts, " · ")
+}
+
+func formatRichChineseElapsedLine(d time.Duration, model string) string {
+	dur := formatRichDurationCompact(d)
+	if model == "" {
+		return fmt.Sprintf("已完成 · 耗时 %s", dur)
+	}
+	return fmt.Sprintf("已完成 · 耗时 %s · %s", dur, model)
+}
+
+func formatRichDurationCompact(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	totalSec := int64(d / time.Second)
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	case d < time.Hour:
+		m := totalSec / 60
+		s := totalSec % 60
+		return fmt.Sprintf("%dm %02ds", m, s)
+	default:
+		h := totalSec / 3600
+		m := (totalSec % 3600) / 60
+		return fmt.Sprintf("%dh %02dm", h, m)
+	}
+}
+
+func formatRichTokenCount(n int) string {
+	if n < 0 {
+		n = 0
+	}
+	switch {
+	case n < 1000:
+		return fmt.Sprintf("%d", n)
+	case n < 1_000_000:
+		s := fmt.Sprintf("%.1f", float64(n)/1000.0)
+		s = strings.TrimSuffix(s, ".0")
+		return s + "k"
+	default:
+		s := fmt.Sprintf("%.1f", float64(n)/1_000_000.0)
+		s = strings.TrimSuffix(s, ".0")
+		return s + "m"
+	}
+}
+
+func (e *Engine) richCardStatusTitle(status CardStatus) string {
+	lang := LangEnglish
+	if e != nil && e.i18n != nil {
+		lang = e.i18n.currentLang()
+	}
+	zh := lang == LangChinese || lang == LangTraditionalChinese
+	switch status {
+	case CardStatusDone:
+		if zh {
+			return "已完成"
+		}
+		return "Done"
+	case CardStatusError:
+		if zh {
+			return "出错"
+		}
+		return "Error"
+	case CardStatusThinking, CardStatusWorking:
+		if zh {
+			return "处理中"
+		}
+		return "Working"
+	default:
+		return ""
+	}
 }
 
 // formatStatusTokenCount renders an integer token count compactly.
@@ -6193,7 +6331,7 @@ func formatElapsed(d time.Duration, streaming bool, lang Language) string {
 		return fmt.Sprintf("⏱ Running for %s...", dur)
 	}
 	if zh {
-		return fmt.Sprintf("⏱ 用时 %s", dur)
+		return fmt.Sprintf("已完成 · 耗时 %s", dur)
 	}
 	return fmt.Sprintf("⏱ Elapsed %s", dur)
 }
@@ -6207,7 +6345,9 @@ func replyFooterModel(session AgentSession, agent Agent) string {
 		}
 	}
 	if getter, ok := agent.(interface{ GetModel() string }); ok {
-		return strings.TrimSpace(getter.GetModel())
+		if model := strings.TrimSpace(getter.GetModel()); model != "" {
+			return model
+		}
 	}
 	return ""
 }
@@ -6362,7 +6502,11 @@ func replyFooterWorkDir(session AgentSession, agent Agent, workspaceDir string) 
 	if dir == "" {
 		return ""
 	}
-	return compactReplyFooterPath(dir)
+	display := compactReplyFooterPath(dir)
+	if display == "." {
+		return ""
+	}
+	return display
 }
 
 func compactReplyFooterPath(path string) string {
@@ -9775,7 +9919,7 @@ func (e *Engine) SendToSessionWithAttachments(sessionKey, message string, images
 			return err
 		}
 		// Use AtMentionSender when @users specified and platform supports it
-		if (len(atUsers) > 0 || atAll) {
+		if len(atUsers) > 0 || atAll {
 			if atSender, ok := p.(AtMentionSender); ok {
 				if err := atSender.ReplyWithAt(e.ctx, replyCtx, message, atUsers, atAll); err != nil {
 					return err

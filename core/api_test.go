@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,19 @@ import (
 	"testing"
 	"time"
 )
+
+type stubDecisionNotifier struct {
+	sent []Decision
+	err  error
+}
+
+func (s *stubDecisionNotifier) SendDecisionRequest(_ context.Context, dec Decision) error {
+	if s.err != nil {
+		return s.err
+	}
+	s.sent = append(s.sent, dec)
+	return nil
+}
 
 func TestHandleSend_AllowsAttachmentOnly(t *testing.T) {
 	engine := NewEngine("test", &stubAgent{}, []Platform{&stubMediaPlatform{stubPlatformEngine: stubPlatformEngine{n: "test"}}}, "", LangEnglish)
@@ -38,6 +52,71 @@ func TestHandleSend_AllowsAttachmentOnly(t *testing.T) {
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestDecisionAPIAskRespondGet(t *testing.T) {
+	notifier := &stubDecisionNotifier{}
+	api := &APIServer{
+		decisions: NewDecisionStore(),
+		notifier:  notifier,
+	}
+	body, err := json.Marshal(DecisionAskRequest{
+		Title:       "Need confirmation",
+		Message:     "Proceed?",
+		Choices:     []string{"continue", "abort"},
+		Recommended: "continue",
+		TimeoutMins: 30,
+	})
+	if err != nil {
+		t.Fatalf("marshal ask: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/decision/ask", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	api.handleDecisionAsk(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("ask status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(notifier.sent) != 1 {
+		t.Fatalf("notifier sent %d decisions, want 1", len(notifier.sent))
+	}
+	var dec Decision
+	if err := json.Unmarshal(rec.Body.Bytes(), &dec); err != nil {
+		t.Fatalf("decode decision: %v", err)
+	}
+	if dec.ID == "" {
+		t.Fatal("decision ID is empty")
+	}
+
+	respBody, err := json.Marshal(DecisionResponse{
+		DecisionID: dec.ID,
+		Choice:     "continue",
+		Comment:    "Use proxy if slow.",
+	})
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	req = httptest.NewRequest(http.MethodPost, "/decision/respond", bytes.NewReader(respBody))
+	rec = httptest.NewRecorder()
+	api.handleDecisionRespond(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("respond status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/decision/get?id="+dec.ID, nil)
+	rec = httptest.NewRecorder()
+	api.handleDecisionGet(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	var record DecisionRecord
+	if err := json.Unmarshal(rec.Body.Bytes(), &record); err != nil {
+		t.Fatalf("decode record: %v", err)
+	}
+	if record.Response == nil || record.Response.Choice != "continue" || record.Response.Comment != "Use proxy if slow." {
+		t.Fatalf("record response = %#v", record.Response)
 	}
 }
 

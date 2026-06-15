@@ -11,6 +11,7 @@ cc-connect.bak-*
 *.test
 *.out
 *.old
+deploy/**/bin/
 
 # ============================================================================
 # Go workspace & tooling
@@ -40,6 +41,7 @@ vendor/
 config.toml
 config.*.toml
 !config.example.toml
+!deploy/**/config.template.toml
 .env
 *.local.toml
 
@@ -130,6 +132,7 @@ Desktop.ini
 # AI agent planning artifacts
 # ============================================================================
 .planning/
+.codex-tmp/
 
 # ============================================================================
 # Security

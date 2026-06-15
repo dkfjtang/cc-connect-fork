@@ -124,6 +124,7 @@ type Platform struct {
 	reactionEmoji              string
 	doneEmoji                  string
 	allowFrom                  string
+	notifyUserID               string
 	allowChat                  string
 	groupOnly                  bool
 	groupReplyAll              bool
@@ -131,23 +132,24 @@ type Platform struct {
 	shareSessionInChannel      bool
 	threadIsolation            bool
 	// noReplyToTrigger: when true, send via Create instead of Im.Message.Reply (no quote to the user's message).
-	noReplyToTrigger bool
-	resolveMentions  bool
-	client           *lark.Client
-	replayClient     *lark.Client
-	replayClientMu   sync.Mutex
-	wsClient         *larkws.Client
-	handler          core.MessageHandler
-	cardNavHandler   core.CardNavigationHandler
-	cancel           context.CancelFunc
-	dedup            *core.MessageDedup
-	botOpenID        string
-	peerBots         map[string]string // app_id -> friendly alias, for quoted-reply attribution
-	userNameCache    sync.Map          // open_id -> display name
-	chatNameCache    sync.Map          // chat_id -> chat name
-	chatMemberCache  sync.Map          // chatID -> *chatMemberEntry
-	recalledMu       sync.Mutex
-	recalledMsgIDs   map[string]time.Time // message_id -> recall time, short TTL race guard
+	noReplyToTrigger  bool
+	resolveMentions   bool
+	client            *lark.Client
+	replayClient      *lark.Client
+	replayClientMu    sync.Mutex
+	wsClient          *larkws.Client
+	handler           core.MessageHandler
+	cardNavHandler    core.CardNavigationHandler
+	decisionResponder func(context.Context, core.DecisionResponse) error
+	cancel            context.CancelFunc
+	dedup             *core.MessageDedup
+	botOpenID         string
+	peerBots          map[string]string // app_id -> friendly alias, for quoted-reply attribution
+	userNameCache     sync.Map          // open_id -> display name
+	chatNameCache     sync.Map          // chat_id -> chat name
+	chatMemberCache   sync.Map          // chatID -> *chatMemberEntry
+	recalledMu        sync.Mutex
+	recalledMsgIDs    map[string]time.Time // message_id -> recall time, short TTL race guard
 	// Webhook mode fields (for Lark international version)
 	server       *http.Server
 	port         string
@@ -189,6 +191,10 @@ func (p *Platform) SetCardNavigationHandler(h core.CardNavigationHandler) {
 	p.cardNavHandler = h
 }
 
+func (p *Platform) SetDecisionResponder(h func(context.Context, core.DecisionResponse) error) {
+	p.decisionResponder = h
+}
+
 func New(opts map[string]any) (core.Platform, error) {
 	return newPlatform("feishu", lark.FeishuBaseUrl, opts)
 }
@@ -221,6 +227,13 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 	}
 	allowFrom, _ := opts["allow_from"].(string)
 	core.CheckAllowFrom(name, allowFrom)
+	notifyUserID, _ := opts["notify_user_id"].(string)
+	if strings.TrimSpace(notifyUserID) == "" {
+		notifyUserID, _ = opts["default_user_id"].(string)
+	}
+	if strings.TrimSpace(notifyUserID) == "" {
+		notifyUserID = singleFeishuAllowFromUser(allowFrom)
+	}
 	allowChat, _ := opts["allow_chat"].(string)
 	groupOnly, _ := opts["group_only"].(bool)
 	groupReplyAll, _ := opts["group_reply_all"].(bool)
@@ -289,6 +302,7 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 		reactionEmoji:              reactionEmoji,
 		doneEmoji:                  doneEmoji,
 		allowFrom:                  allowFrom,
+		notifyUserID:               strings.TrimSpace(notifyUserID),
 		allowChat:                  allowChat,
 		groupOnly:                  groupOnly,
 		groupReplyAll:              groupReplyAll,
@@ -431,7 +445,7 @@ func (p *Platform) Start(handler core.MessageHandler) error {
 			// Fan out card actions: try each platform, return first non-nil response.
 			// Each platform's onCardAction checks allow_chat before processing.
 			for _, sibling := range p.sharedGroup.allPlatforms() {
-				resp, err := sibling.onCardAction(event)
+				resp, err := sibling.onCardAction(ctx, event)
 				if err != nil {
 					return nil, err
 				}
@@ -548,7 +562,7 @@ func (p *Platform) webhookHandler(w http.ResponseWriter, r *http.Request) {
 //   - nav:/xxx   — render a card page and update the original card in-place
 //   - act:/xxx   — execute an action, then render and update the card in-place
 //   - cmd:/xxx   — legacy: dispatch as a user command (sends a new message)
-func (p *Platform) onCardAction(event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
+func (p *Platform) onCardAction(ctx context.Context, event *callback.CardActionTriggerEvent) (*callback.CardActionTriggerResponse, error) {
 	if event.Event == nil || event.Event.Action == nil {
 		return nil, nil
 	}
@@ -595,6 +609,45 @@ func (p *Platform) onCardAction(event *callback.CardActionTriggerEvent) (*callba
 		chatID = userID
 	}
 	sessionKey := p.sessionKeyFromCardAction(chatID, userID, event.Event.Action.Value)
+
+	if actionVal == "decision:respond" {
+		if p.decisionResponder == nil {
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "error", Content: "decision resolver is unavailable"},
+			}, nil
+		}
+		decisionID, _ := event.Event.Action.Value["decision_id"].(string)
+		decisionChoice, _ := event.Event.Action.Value["decision_choice"].(string)
+		if strings.TrimSpace(decisionID) == "" || strings.TrimSpace(decisionChoice) == "" {
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "error", Content: "missing decision payload"},
+			}, nil
+		}
+		comment, _ := event.Event.Action.Value["comment"].(string)
+		if comment == "" && event.Event.Action.FormValue != nil {
+			if v, ok := event.Event.Action.FormValue["decision_comment"].(string); ok {
+				comment = v
+			}
+		}
+		if err := p.decisionResponder(ctx, core.DecisionResponse{
+			DecisionID: decisionID,
+			Choice:     decisionChoice,
+			Comment:    comment,
+		}); err != nil {
+			slog.Warn(p.tag()+": decision resolve failed", "error", err, "decision_id", decisionID)
+			return &callback.CardActionTriggerResponse{
+				Toast: &callback.Toast{Type: "error", Content: "decision resolve failed"},
+			}, nil
+		}
+		cb := core.NewCard().Title("Decision received", "green")
+		cb.Markdown("The decision has been recorded.")
+		return &callback.CardActionTriggerResponse{
+			Card: &callback.Card{
+				Type: "raw",
+				Data: renderCardMap(cb.Build(), sessionKey),
+			},
+		}, nil
+	}
 
 	// nav: / act: — synchronous card update
 	if strings.HasPrefix(actionVal, "nav:") || strings.HasPrefix(actionVal, "act:") {
@@ -3144,6 +3197,53 @@ func (p *Platform) createMessage(ctx context.Context, chatID, msgType, content, 
 			return nil
 		})
 	})
+}
+
+func (p *Platform) createUserMessage(ctx context.Context, userID, msgType, content, op string) error {
+	req := larkim.NewCreateMessageReqBuilder().
+		ReceiveIdType(larkim.ReceiveIdTypeOpenId).
+		Body(larkim.NewCreateMessageReqBodyBuilder().
+			ReceiveId(userID).
+			MsgType(msgType).
+			Content(content).
+			Build()).
+		Build()
+	return p.withTransientRetry(ctx, op, func() error {
+		return p.withFreshTenantAccessTokenRetry(ctx, op, func(client *lark.Client, options ...larkcore.RequestOptionFunc) error {
+			resp, err := client.Im.Message.Create(ctx, req, options...)
+			if err != nil {
+				return fmt.Errorf("%s: %s api call: %w", p.tag(), op, err)
+			}
+			if !resp.Success() {
+				return fmt.Errorf("%s: %s failed code=%d msg=%s", p.tag(), op, resp.Code, resp.Msg)
+			}
+			return nil
+		})
+	})
+}
+
+func (p *interactivePlatform) SendDecisionRequest(ctx context.Context, dec core.Decision) error {
+	userID := strings.TrimSpace(p.notifyUserID)
+	if userID == "" {
+		return fmt.Errorf("%s: notify_user_id is not configured", p.tag())
+	}
+	cardJSON := renderCard(buildDecisionCard(dec), "")
+	return p.createUserMessage(ctx, userID, larkim.MsgTypeInteractive, cardJSON, "send decision request")
+}
+
+func singleFeishuAllowFromUser(allowFrom string) string {
+	var users []string
+	for _, raw := range strings.Split(allowFrom, ",") {
+		user := strings.TrimSpace(raw)
+		if user == "" || user == "*" {
+			continue
+		}
+		users = append(users, user)
+	}
+	if len(users) == 1 {
+		return users[0]
+	}
+	return ""
 }
 
 func (p *Platform) withFreshTenantAccessTokenRetry(ctx context.Context, operation string, fn feishuRequestFunc) error {
@@ -5827,8 +5927,8 @@ const maxRichCardJSONBytes = 28000
 // buildRichCard renders a Card 2.0 "single-card" turn with collapsible
 // reasoning/tool panels, streaming markdown body, status-colored header, and a
 // pre-composed multi-line statusFooter (engine-owned, includes elapsed).
-func buildRichCard(status core.CardStatus, _ string, steps []core.ToolStep, markdown string, streaming bool, statusFooter string) string {
-	b, err := buildRichCardJSONBytes(status, steps, markdown, streaming, statusFooter)
+func buildRichCard(status core.CardStatus, title string, steps []core.ToolStep, markdown string, streaming bool, statusFooter string) string {
+	b, err := buildRichCardJSONBytes(status, title, steps, markdown, streaming, statusFooter)
 	if err != nil {
 		slog.Debug("feishu: build rich card marshal failed, fallback to basic card", "error", err)
 		return buildCardJSONWithStatus(markdown, status)
@@ -5850,7 +5950,7 @@ func buildRichCard(status core.CardStatus, _ string, steps []core.ToolStep, mark
 		{perLane: 3, textLen: 80},
 	} {
 		compactSteps := compactRichStepsForCardSize(steps, limit.perLane, limit.textLen)
-		compact, err := buildRichCardJSONBytes(status, compactSteps, markdown, streaming, statusFooter)
+		compact, err := buildRichCardJSONBytes(status, title, compactSteps, markdown, streaming, statusFooter)
 		if err == nil && len(compact) <= maxRichCardJSONBytes {
 			slog.Debug("feishu: rich card exceeded size limit, compacted panels",
 				"original_size", len(b),
@@ -5870,7 +5970,7 @@ func buildRichCard(status core.CardStatus, _ string, steps []core.ToolStep, mark
 	return buildCardJSONWithStatus(fallbackMarkdown, status)
 }
 
-func buildRichCardJSONBytes(status core.CardStatus, steps []core.ToolStep, markdown string, streaming bool, statusFooter string) ([]byte, error) {
+func buildRichCardJSONBytes(status core.CardStatus, title string, steps []core.ToolStep, markdown string, streaming bool, statusFooter string) ([]byte, error) {
 	reasoningSteps, toolSteps := splitRichStepsByLane(steps)
 	panelMaps := make([]map[string]any, 0, 2)
 	if len(reasoningSteps) > 0 {
@@ -5932,17 +6032,23 @@ func buildRichCardJSONBytes(status core.CardStatus, steps []core.ToolStep, markd
 
 	// Header template color follows status.
 	headerTemplate := "blue"
-	headerTitle := pickThinkingVerb()
+	headerTitle := strings.TrimSpace(title)
 	switch status {
 	case core.CardStatusDone:
 		headerTemplate = "green"
-		headerTitle = "Done"
+		if headerTitle == "" {
+			headerTitle = "Done"
+		}
 	case core.CardStatusError:
 		headerTemplate = "red"
-		headerTitle = "Error"
+		if headerTitle == "" {
+			headerTitle = "Error"
+		}
 	case core.CardStatusThinking, core.CardStatusWorking:
 		headerTemplate = "blue"
-		headerTitle = pickThinkingVerb()
+		if headerTitle == "" {
+			headerTitle = pickThinkingVerb()
+		}
 	}
 
 	card := map[string]any{

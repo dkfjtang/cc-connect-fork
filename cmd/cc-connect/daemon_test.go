@@ -45,7 +45,7 @@ func TestParseDaemonInstallArgs_WorkDirOverridesConfig(t *testing.T) {
 		t.Fatalf("force = false, want true")
 	}
 
-	want := filepath.Clean("/tmp/override")
+	want := "/tmp/override"
 	if cfg.WorkDir != want {
 		t.Fatalf("cfg.WorkDir = %q, want %q", cfg.WorkDir, want)
 	}

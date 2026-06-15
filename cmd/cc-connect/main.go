@@ -149,6 +149,9 @@ func main() {
 		case "relay":
 			runRelay(os.Args[2:])
 			return
+		case "decision":
+			runDecision(os.Args[2:])
+			return
 		case "sessions":
 			runSessions(os.Args[2:])
 			return
@@ -280,6 +283,7 @@ func main() {
 
 	engines := make([]*core.Engine, 0, len(cfg.Projects))
 	effectiveWorkDirs := make([]string, 0, len(cfg.Projects))
+	projectPlatforms := make([][]core.Platform, 0, len(cfg.Projects))
 
 	for _, proj := range cfg.Projects {
 		// Inject project-level run_as_user / run_as_env into the agent's
@@ -310,6 +314,11 @@ func main() {
 			}
 			opts["cc_data_dir"] = cfg.DataDir
 			opts["cc_project"] = proj.Name
+			if strings.EqualFold(pc.Type, "feishu") || strings.EqualFold(pc.Type, "lark") {
+				if _, ok := opts["notify_user_id"]; !ok && strings.TrimSpace(cfg.Notify.Feishu.DefaultUserID) != "" {
+					opts["notify_user_id"] = cfg.Notify.Feishu.DefaultUserID
+				}
+			}
 			p, err := core.CreatePlatform(pc.Type, opts)
 			if err != nil {
 				slog.Error("failed to create platform", "project", proj.Name, "type", pc.Type, "error", err)
@@ -853,6 +862,7 @@ func main() {
 
 		engines = append(engines, engine)
 		effectiveWorkDirs = append(effectiveWorkDirs, effectiveWorkDir)
+		projectPlatforms = append(projectPlatforms, platforms)
 	}
 
 	// Start cron scheduler
@@ -1150,6 +1160,20 @@ func main() {
 		}
 		if cronSched != nil {
 			apiSrv.SetCronScheduler(cronSched)
+		}
+		var decisionNotifierSet bool
+		for _, platforms := range projectPlatforms {
+			for _, p := range platforms {
+				if responder, ok := p.(core.DecisionResponder); ok {
+					responder.SetDecisionResponder(apiSrv.ResolveDecision)
+				}
+				if !decisionNotifierSet {
+					if notifier, ok := p.(core.DecisionNotifier); ok {
+						apiSrv.SetDecisionNotifier(notifier)
+						decisionNotifierSet = true
+					}
+				}
+			}
 		}
 		apiSrv.Start()
 	}

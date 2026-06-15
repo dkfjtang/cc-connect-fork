@@ -1,0 +1,23 @@
+<service>
+  <id>cc-connect-codex-feishu</id>
+  <name>cc-connect Codex Feishu</name>
+  <description>cc-connect bridge for Feishu and local Codex.</description>
+
+  <executable>F:\development\cc-connect-service\cc-connect.exe</executable>
+  <arguments>--config F:\development\cc-connect-service\config.toml --force</arguments>
+  <workingdirectory>F:\development\cc-connect-service</workingdirectory>
+
+  <env name="CODEX_HOME" value="C:\Users\Administrator\.codex" />
+  <env name="PATH" value="C:\nvm4w\nodejs;%PATH%" />
+
+  <log mode="roll-by-size">
+    <sizeThreshold>10485760</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+
+  <onfailure action="restart" delay="10 sec" />
+  <onfailure action="restart" delay="30 sec" />
+  <onfailure action="restart" delay="60 sec" />
+
+  <stoptimeout>30 sec</stoptimeout>
+</service>

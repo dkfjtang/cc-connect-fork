@@ -207,6 +207,34 @@ func TestRunAsEnv_RejectsDangerousVars(t *testing.T) {
 	}
 }
 
+func TestNotifyAndWatchdogConfig(t *testing.T) {
+	raw := `
+[notify.feishu]
+default_user_id = "ou_owner"
+
+[watchdog]
+enabled = true
+long_task_notify_mins = 10
+decision_reminder_mins = 20
+`
+	var cfg Config
+	if _, err := toml.Decode(raw, &cfg); err != nil {
+		t.Fatalf("decode config: %v", err)
+	}
+	if cfg.Notify.Feishu.DefaultUserID != "ou_owner" {
+		t.Fatalf("default_user_id = %q", cfg.Notify.Feishu.DefaultUserID)
+	}
+	if cfg.Watchdog.Enabled == nil || !*cfg.Watchdog.Enabled {
+		t.Fatalf("watchdog enabled = %#v, want true", cfg.Watchdog.Enabled)
+	}
+	if cfg.Watchdog.LongTaskNotifyMins != 10 {
+		t.Fatalf("long_task_notify_mins = %d", cfg.Watchdog.LongTaskNotifyMins)
+	}
+	if cfg.Watchdog.DecisionReminderMins != 20 {
+		t.Fatalf("decision_reminder_mins = %d", cfg.Watchdog.DecisionReminderMins)
+	}
+}
+
 func TestEffectiveDisplayQuiet(t *testing.T) {
 	tru, fal := true, false
 	compact := DisplayModeCompact
@@ -468,6 +496,7 @@ func TestValidateProjectDisplayConfig(t *testing.T) {
 func TestLoad_DefaultsDataDir(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
 
 	cfgPath := filepath.Join(dir, "config.toml")
 	if err := os.WriteFile(cfgPath, []byte(baseConfigTOML), 0o644); err != nil {
@@ -532,13 +561,13 @@ func TestLoad_ResolvesEnvPlaceholders(t *testing.T) {
 		t.Fatalf("Load() error: %v", err)
 	}
 
-	if got, want := cfg.DataDir, filepath.Join(root, "state"); got != want {
+	if got, want := filepath.Clean(cfg.DataDir), filepath.Join(root, "state"); got != want {
 		t.Fatalf("DataDir = %q, want %q", got, want)
 	}
 	if got := cfg.Webhook.Token; got != "hook-secret" {
 		t.Fatalf("Webhook.Token = %q, want hook-secret", got)
 	}
-	if got := stringMapValue(cfg.Projects[0].Agent.Options, "work_dir"); got != filepath.Join(root, "repo") {
+	if got := filepath.Clean(stringMapValue(cfg.Projects[0].Agent.Options, "work_dir")); got != filepath.Join(root, "repo") {
 		t.Fatalf("work_dir = %q, want %q", got, filepath.Join(root, "repo"))
 	}
 	if got := stringMapValue(cfg.Projects[0].Agent.Options, "note"); got != "prefix-hook-secret-suffix" {

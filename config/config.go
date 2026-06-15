@@ -105,6 +105,8 @@ type Config struct {
 	OutgoingRateLimit  OutgoingRateLimitConfig `toml:"outgoing_rate_limit"` // outgoing message throttling
 	Relay              RelayConfig             `toml:"relay"`               // bot-to-bot relay behavior
 	Cron               CronConfig              `toml:"cron"`
+	Notify             NotifyConfig            `toml:"notify"`
+	Watchdog           WatchdogConfig          `toml:"watchdog"`
 	Queue              QueueConfig             `toml:"queue"`
 	Webhook            WebhookConfig           `toml:"webhook"`
 	Bridge             BridgeConfig            `toml:"bridge"`
@@ -124,6 +126,23 @@ type Config struct {
 type CronConfig struct {
 	Silent      *bool  `toml:"silent"`       // suppress cron start notification; default false
 	SessionMode string `toml:"session_mode"` // default session mode: "" or "reuse" (default) or "new_per_run"
+}
+
+// NotifyConfig controls proactive personal notifications.
+type NotifyConfig struct {
+	Feishu FeishuNotifyConfig `toml:"feishu"`
+}
+
+// FeishuNotifyConfig controls Feishu personal notification target selection.
+type FeishuNotifyConfig struct {
+	DefaultUserID string `toml:"default_user_id,omitempty"`
+}
+
+// WatchdogConfig controls long-running task and decision reminder behavior.
+type WatchdogConfig struct {
+	Enabled              *bool `toml:"enabled,omitempty"`
+	LongTaskNotifyMins   int   `toml:"long_task_notify_mins,omitempty"`
+	DecisionReminderMins int   `toml:"decision_reminder_mins,omitempty"`
 }
 
 // QueueConfig controls the per-session message queue.

@@ -569,6 +569,18 @@ type CommandRegistrar interface {
 	RegisterCommands(commands []BotCommandInfo) error
 }
 
+// DecisionNotifier is an optional interface for components that can deliver a
+// newly created decision to an external channel.
+type DecisionNotifier interface {
+	SendDecisionRequest(ctx context.Context, dec Decision) error
+}
+
+// DecisionResponder lets a platform receive a decision-resolution callback from
+// the local API server.
+type DecisionResponder interface {
+	SetDecisionResponder(func(context.Context, DecisionResponse) error)
+}
+
 // ChannelNameResolver is an optional interface for platforms that can resolve
 // channel IDs to human-readable names.
 type ChannelNameResolver interface {

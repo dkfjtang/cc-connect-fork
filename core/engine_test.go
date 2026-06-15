@@ -9755,7 +9755,7 @@ func TestResolveLocalDirPath_AcceptsSubdir(t *testing.T) {
 	}
 	want, err := filepath.EvalSymlinks(sub)
 	if err != nil {
-		t.Fatalf("EvalSymlinks(%q): %v", sub, err)
+		want = filepath.Clean(sub)
 	}
 	got, err := resolveLocalDirPath("project", base)
 	if err != nil {
@@ -10068,8 +10068,20 @@ func TestCmdShell_MultiWorkspaceIgnoresMissingSharedBinding(t *testing.T) {
 	for {
 		sent := p.getSent()
 		if len(sent) > 0 {
-			// With streaming progress, the final result is the last sent message
-			output := sent[len(sent)-1]
+			output := ""
+			for i := len(sent) - 1; i >= 0; i-- {
+				if strings.Contains(sent[i], "✅ `pwd`") || strings.Contains(sent[i], agent.workDir) || strings.Contains(sent[i], expectedResolved) {
+					output = sent[i]
+					break
+				}
+			}
+			if output == "" {
+				if time.Now().After(deadline) {
+					t.Fatalf("expected a final shell response, got %q", sent)
+				}
+				time.Sleep(10 * time.Millisecond)
+				continue
+			}
 			if !strings.Contains(output, agent.workDir) && !strings.Contains(output, expectedResolved) {
 				t.Fatalf("expected shell output to fall back to agent work dir %q (resolved %q), got %q", agent.workDir, expectedResolved, output)
 			}

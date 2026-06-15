@@ -284,7 +284,7 @@ func TestInteractivePlatform_CardActionPassesCardSenderToHandler(t *testing.T) {
 		msgCh <- msg
 	}
 
-	_, err = ip.onCardAction(&callback.CardActionTriggerEvent{
+	_, err = ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
 		Event: &callback.CardActionTriggerRequest{
 			Operator: &callback.Operator{OpenID: openID},
 			Action:   &callback.CallBackAction{Value: map[string]any{"action": action}},
@@ -332,7 +332,7 @@ func TestInteractivePlatform_CardActionActWithoutCardResponseDoesNotWarn(t *test
 	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	t.Cleanup(func() { slog.SetDefault(orig) })
 
-	resp, err := ip.onCardAction(&callback.CardActionTriggerEvent{
+	resp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
 		Event: &callback.CardActionTriggerRequest{
 			Operator: &callback.Operator{OpenID: "ou_test_user"},
 			Action:   &callback.CallBackAction{Value: map[string]any{"action": "act:/delete-mode toggle session-1"}},
@@ -371,7 +371,7 @@ func TestInteractivePlatform_CardActionFormSubmitPassesSelectedIDs(t *testing.T)
 		return core.NewCard().Markdown("ok").Build()
 	}
 
-	_, err = ip.onCardAction(&callback.CardActionTriggerEvent{
+	_, err = ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
 		Event: &callback.CardActionTriggerRequest{
 			Operator: &callback.Operator{OpenID: "ou_test_user"},
 			Action: &callback.CallBackAction{
@@ -416,7 +416,7 @@ func TestInteractivePlatform_CardActionFormSubmitUsesActionNameFallback(t *testi
 		return core.NewCard().Markdown("ok").Build()
 	}
 
-	_, err = ip.onCardAction(&callback.CardActionTriggerEvent{
+	_, err = ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
 		Event: &callback.CardActionTriggerRequest{
 			Operator: &callback.Operator{OpenID: "ou_test_user"},
 			Action: &callback.CallBackAction{
@@ -460,7 +460,7 @@ func TestInteractivePlatform_CardActionFormCancelUsesActionNameFallback(t *testi
 		return core.NewCard().Markdown("ok").Build()
 	}
 
-	_, err = ip.onCardAction(&callback.CardActionTriggerEvent{
+	_, err = ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
 		Event: &callback.CardActionTriggerRequest{
 			Operator: &callback.Operator{OpenID: "ou_test_user"},
 			Action: &callback.CallBackAction{
@@ -497,7 +497,7 @@ func TestInteractivePlatform_CardActionUsesCallbackSessionKey(t *testing.T) {
 		msgCh <- msg
 	}
 
-	_, err = ip.onCardAction(&callback.CardActionTriggerEvent{
+	_, err = ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
 		Event: &callback.CardActionTriggerRequest{
 			Operator: &callback.Operator{OpenID: "ou_test_user"},
 			Action: &callback.CallBackAction{Value: map[string]any{
@@ -541,7 +541,7 @@ func TestInteractivePlatform_ModelCardActionReturnsCardUpdate(t *testing.T) {
 		return core.NewCard().Markdown("switching").Build()
 	}
 
-	resp, err := ip.onCardAction(&callback.CardActionTriggerEvent{
+	resp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
 		Event: &callback.CardActionTriggerRequest{
 			Operator: &callback.Operator{OpenID: "ou_test_user"},
 			Action:   &callback.CallBackAction{Value: map[string]any{"action": "act:/model switch 1"}},
@@ -1263,6 +1263,98 @@ func TestBuildRichCard_SeparatesReasoningAndTools(t *testing.T) {
 	}
 }
 
+func TestBuildRichCard_UsesProvidedHeaderTitle(t *testing.T) {
+	cardJSON := buildRichCard(core.CardStatusDone, "已完成", nil, "answer", false, "")
+
+	var card map[string]any
+	if err := json.Unmarshal([]byte(cardJSON), &card); err != nil {
+		t.Fatalf("card JSON is invalid: %v", err)
+	}
+	header, _ := card["header"].(map[string]any)
+	title, _ := header["title"].(map[string]any)
+	if got := title["content"]; got != "已完成" {
+		t.Fatalf("header title = %#v, want 已完成", got)
+	}
+	if got := header["template"]; got != "green" {
+		t.Fatalf("header template = %#v, want green", got)
+	}
+}
+
+func TestBuildDecisionCardPayload(t *testing.T) {
+	card := buildDecisionCard(core.Decision{
+		ID:          "dec_123",
+		Title:       "Need confirmation",
+		Message:     "Proceed?",
+		Choices:     []string{"continue", "abort"},
+		Recommended: "continue",
+	})
+	cardJSON := renderCard(card, "")
+
+	for _, want := range []string{
+		`"tag":"form"`,
+		`"name":"decision_form"`,
+		`"tag":"input"`,
+		`"name":"decision_comment"`,
+		"decision:respond",
+		"decision_id",
+		"dec_123",
+		"decision_choice",
+		"continue",
+		"abort",
+	} {
+		if !strings.Contains(cardJSON, want) {
+			t.Fatalf("decision card should contain %q, got %s", want, cardJSON)
+		}
+	}
+}
+
+func TestInteractivePlatform_DecisionActionResolvesWithComment(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+
+	respCh := make(chan core.DecisionResponse, 1)
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+		respCh <- resp
+		return nil
+	})
+
+	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				Value: map[string]any{
+					"action":          "decision:respond",
+					"decision_id":     "dec_123",
+					"decision_choice": "continue",
+				},
+				FormValue: map[string]any{"decision_comment": "Use proxy if slow."},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if cardResp == nil || cardResp.Card == nil {
+		t.Fatalf("expected card update response, got %#v", cardResp)
+	}
+
+	select {
+	case got := <-respCh:
+		if got.DecisionID != "dec_123" || got.Choice != "continue" || got.Comment != "Use proxy if slow." {
+			t.Fatalf("decision response = %#v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected decision resolver invocation")
+	}
+}
+
 func TestBuildRichCard_UsesToolDescriptorsForAliases(t *testing.T) {
 	cardJSON := buildRichCard(core.CardStatusWorking, "", []core.ToolStep{
 		{Kind: core.ToolStepKindTool, Name: "web_fetch", Summary: "https://example.com/docs?token=secret"},
@@ -1884,7 +1976,7 @@ func TestCardAction_NavFast_ReturnsCard(t *testing.T) {
 	}
 
 	start := time.Now()
-	resp, err := ip.onCardAction(&callback.CardActionTriggerEvent{
+	resp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
 		Event: &callback.CardActionTriggerRequest{
 			Operator: &callback.Operator{OpenID: "ou_test_user"},
 			Action:   &callback.CallBackAction{Value: map[string]any{"action": "nav:/list"}},
@@ -1925,7 +2017,7 @@ func TestCardAction_NavSlow_ReturnsToastThenRefreshes(t *testing.T) {
 	}
 
 	start := time.Now()
-	resp, err := ip.onCardAction(&callback.CardActionTriggerEvent{
+	resp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
 		Event: &callback.CardActionTriggerRequest{
 			Operator: &callback.Operator{OpenID: "ou_test_user"},
 			Action:   &callback.CallBackAction{Value: map[string]any{"action": "nav:/list"}},
@@ -1973,7 +2065,7 @@ func TestCardAction_NavSlow_NilCard_NoRefresh(t *testing.T) {
 		return nil
 	}
 
-	resp, err := ip.onCardAction(&callback.CardActionTriggerEvent{
+	resp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
 		Event: &callback.CardActionTriggerRequest{
 			Operator: &callback.Operator{OpenID: "ou_test_user"},
 			Action:   &callback.CallBackAction{Value: map[string]any{"action": "nav:/list"}},

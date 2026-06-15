@@ -182,6 +182,12 @@ type appServerSession struct {
 	runtimeMu sync.RWMutex
 	usage     *core.UsageReport
 	context   *core.ContextUsage
+
+	runtimeCfgMu       sync.Mutex
+	runtimeCfgModel    string
+	runtimeCfgEffort   string
+	runtimeCfgFetched  time.Time
+	runtimeCfgFetchErr error
 }
 
 const (
@@ -895,14 +901,51 @@ func (s *appServerSession) GetWorkDir() string {
 
 func (s *appServerSession) GetModel() string {
 	s.runtimeMu.RLock()
-	defer s.runtimeMu.RUnlock()
-	return strings.TrimSpace(s.model)
+	model := strings.TrimSpace(s.model)
+	s.runtimeMu.RUnlock()
+	if model != "" {
+		return model
+	}
+	model, _ = s.runtimeConfig()
+	return model
 }
 
 func (s *appServerSession) GetReasoningEffort() string {
 	s.runtimeMu.RLock()
-	defer s.runtimeMu.RUnlock()
-	return strings.TrimSpace(s.effort)
+	effort := strings.TrimSpace(s.effort)
+	s.runtimeMu.RUnlock()
+	if effort != "" {
+		return effort
+	}
+	_, effort = s.runtimeConfig()
+	return effort
+}
+
+func (s *appServerSession) runtimeConfig() (string, string) {
+	s.runtimeCfgMu.Lock()
+	defer s.runtimeCfgMu.Unlock()
+
+	if !s.runtimeCfgFetched.IsZero() && time.Since(s.runtimeCfgFetched) < codexRuntimeConfigCacheTTL {
+		return s.runtimeCfgModel, s.runtimeCfgEffort
+	}
+
+	ctx, cancel := context.WithTimeout(s.ctx, codexRuntimeConfigTimeout)
+	defer cancel()
+
+	model, effort, err := loadCodexRuntimeConfig(ctx, s.workDir, s.extraEnv)
+	if err == nil {
+		s.runtimeCfgModel = model
+		s.runtimeCfgEffort = effort
+		s.runtimeCfgFetchErr = nil
+		s.runtimeCfgFetched = time.Now()
+		return model, effort
+	}
+
+	s.runtimeCfgFetchErr = err
+	if !s.runtimeCfgFetched.IsZero() {
+		return s.runtimeCfgModel, s.runtimeCfgEffort
+	}
+	return "", ""
 }
 
 func (s *appServerSession) GetUsage(ctx context.Context) (*core.UsageReport, error) {

@@ -16,6 +16,7 @@ Complete guide to using cc-connect features.
 - [Voice Reply (TTS)](#voice-reply-text-to-speech)
 - [Image and File Send-Back](#image-and-file-send-back)
 - [Scheduled Tasks (Cron)](#scheduled-tasks-cron)
+- [Remote Decisions](#remote-decisions)
 - [Multi-Bot Relay](#multi-bot-relay)
 - [Daemon Mode](#daemon-mode)
 - [Multi-Workspace Mode](#multi-workspace-mode)
@@ -799,6 +800,37 @@ Optional: `--session-mode new-per-run` starts a fresh agent session on each run 
 > "Every day at 6am, summarize GitHub trending"
 
 Claude Code auto-creates the cron job. For other agents that rely on memory files, run `/cron setup` or `/bind setup` once first; both write the same instructions.
+
+---
+
+## Remote Decisions
+
+Use `cc-connect decision ask` when a local automation needs a Feishu private-message decision before it can continue.
+
+```bash
+cc-connect decision ask \
+  --title "Need confirmation" \
+  --message "The build needs a dependency download. Continue?" \
+  --choices "continue,abort,revise" \
+  --recommended continue \
+  --wait
+```
+
+With `--wait`, the command blocks until the Feishu decision card is resolved or the timeout expires. Output is line-oriented for agents:
+
+```text
+choice=continue
+comment=
+```
+
+Configure the personal Feishu recipient with:
+
+```toml
+[notify.feishu]
+default_user_id = "ou_xxx"
+```
+
+Button choices and optional card comments are supported. The waiting CLI prints both `choice` and `comment`.
 
 ---
 

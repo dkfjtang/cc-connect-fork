@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // newClaudeFooterEngine returns an Engine with all three footer-related flags
@@ -32,6 +33,67 @@ func TestFormatStatusTokenCount(t *testing.T) {
 		if got != want {
 			t.Errorf("formatStatusTokenCount(%d) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestBuildRichStatusLineFooter_ChineseDetailedUsage(t *testing.T) {
+	got := buildClaudeStatusLineFooter("gpt-5.5", "high", &ContextUsage{
+		InputTokens:              72400,
+		OutputTokens:             2300,
+		CacheCreationInputTokens: 971,
+		CachedInputTokens:        102000,
+		ContextWindow:            1_100_000,
+		UsedTokens:               103000,
+	}, LangChinese)
+	want := "↑ 72.4k ↓ 2.3k · 缓存 102k/971 (58%) · 上下文 103k/1.1m (9%)"
+	if got != want {
+		t.Fatalf("Chinese rich footer = %q, want %q", got, want)
+	}
+}
+
+func TestComposeRichStatusFooter_ChineseIncludesModelAndCachePercent(t *testing.T) {
+	e := &Engine{i18n: NewI18n(LangChinese)}
+	e.SetReplyFooterEnabled(true)
+	e.SetShowContextIndicator(true)
+	e.SetShowWorkdirIndicator(true)
+	session := &controllableAgentSession{
+		model:   "gpt-5.5",
+		workDir: "/tmp/ws",
+		contextUsage: &ContextUsage{
+			InputTokens:              72400,
+			OutputTokens:             2300,
+			CacheCreationInputTokens: 971,
+			CachedInputTokens:        102000,
+			ContextWindow:            1_100_000,
+			UsedTokens:               103000,
+		},
+	}
+
+	got := e.composeRichStatusFooter(false, time.Now().Add(-80*time.Second), nil, session, "/tmp/ws")
+	lines := strings.Split(got, "\n")
+	if len(lines) != 3 {
+		t.Fatalf("footer lines = %d, want 3: %q", len(lines), got)
+	}
+	if !strings.Contains(lines[0], "已完成 · 耗时") || !strings.Contains(lines[0], "gpt-5.5") {
+		t.Fatalf("line 1 should include completion, elapsed, and model, got %q", lines[0])
+	}
+	if lines[1] != "↑ 72.4k ↓ 2.3k · 缓存 102k/971 (58%) · 上下文 103k/1.1m (9%)" {
+		t.Fatalf("line 2 = %q", lines[1])
+	}
+}
+
+func TestReplyFooterWorkDir_SuppressesDotPath(t *testing.T) {
+	session := &controllableAgentSession{workDir: "."}
+	if got := replyFooterWorkDir(session, nil, "."); got != "" {
+		t.Fatalf("dot workdir footer = %q, want empty", got)
+	}
+}
+
+func TestFormatElapsed_ChineseDoneUsesCompletedLabel(t *testing.T) {
+	got := formatElapsed(80_000_000_000, false, LangChinese)
+	want := "已完成 · 耗时 1 分 20 秒"
+	if got != want {
+		t.Fatalf("Chinese elapsed = %q, want %q", got, want)
 	}
 }
 
@@ -259,6 +321,7 @@ func TestBuildReplyFooter_LegacyAllSegments(t *testing.T) {
 func TestCompactReplyFooterPath_HomeRelativeDeepPathStaysFull(t *testing.T) {
 	homeDir := t.TempDir()
 	t.Setenv("HOME", homeDir)
+	t.Setenv("USERPROFILE", homeDir)
 
 	shortPath := filepath.Join(homeDir, "codes", "cc-connect")
 	if got, want := compactReplyFooterPath(shortPath), "~/codes/cc-connect"; got != want {
