@@ -85,13 +85,13 @@ func TestBuildDecisionCardPayload(t *testing.T) {
 		ID:          "dec_123",
 		Title:       "需要确认",
 		Message:     "是否继续？",
-		Choices:     []string{"continue", "pause", "revise", "abort"},
+		Choices:     []string{"continue", "pause", "revise", "abort", "ignore", "remind_later", "reconnect"},
 		Recommended: "continue",
 	}
 	rendered := renderCardMap(buildDecisionCard(dec), "")
 	b, _ := json.Marshal(rendered)
 	s := string(b)
-	for _, want := range []string{"dec_123", "decision:respond", "continue", "pause", "revise", "abort", "继续", "暂停", "调整", "终止", "decision_id", "decision_choice", "form", "decision_form", "form_action_type", "submit", "input", "decision_comment"} {
+	for _, want := range []string{"dec_123", "decision:respond", "continue", "pause", "revise", "abort", "ignore", "remind_later", "reconnect", "继续", "暂停", "调整", "终止", "忽略本次", "稍后提醒", "重连/唤醒", "decision_id", "decision_choice", "form", "decision_form", "form_action_type", "submit", "input", "decision_comment"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("rendered card missing %q: %s", want, s)
 		}

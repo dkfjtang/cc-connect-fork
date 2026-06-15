@@ -21,7 +21,7 @@ Start cc-connect normally, then verify the loop from a local shell:
 cc-connect decision ask \
   --title "需要确认" \
   --message "测试失败，是否继续按当前方案修复？" \
-  --choices "continue,abort,revise" \
+  --choices "continue,abort,revise,ignore,remind_later,reconnect" \
   --recommended continue \
   --event-key "smoke:decision" \
   --event-fingerprint "test-failure-v1" \
@@ -84,6 +84,9 @@ The default watchdog choices are:
 - `continue`: continue the current plan.
 - `pause`: stop and leave a concise status report.
 - `revise`: incorporate the user's text comment as the new direction.
+- `ignore`: ignore this notification only.
+- `remind_later`: keep the task paused and re-notify later.
+- `reconnect`: wake or reattach the current session before proceeding.
 
 ## Phase 3: Long Task Watchdog
 
@@ -170,7 +173,7 @@ $key = 'smoke-dedup:<unique-id>'
 & $exe decision ask --data-dir $data `
   --title '去重验证' `
   --message '第一次应该发卡' `
-  --choices continue,pause,revise `
+  --choices continue,pause,revise,ignore,remind_later,reconnect `
   --event-key $key `
   --event-fingerprint 'turn-1' `
   --cooldown-mins 30
@@ -178,7 +181,7 @@ $key = 'smoke-dedup:<unique-id>'
 & $exe decision ask --data-dir $data `
   --title '去重验证' `
   --message '第二次应该去重' `
-  --choices continue,pause,revise `
+  --choices continue,pause,revise,ignore,remind_later,reconnect `
   --event-key $key `
   --event-fingerprint 'turn-1' `
   --cooldown-mins 30

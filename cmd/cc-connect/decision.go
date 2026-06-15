@@ -271,8 +271,8 @@ func formatDecisionDedupedCLIResponse(body []byte) string {
 
 func printDecisionUsage() {
 	fmt.Println(`Usage:
-  cc-connect decision ask --title <text> --message <text> --choices continue,abort,revise [--recommended continue] [--timeout-mins 30] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--wait]
+  cc-connect decision ask --title <text> --message <text> --choices continue,abort,revise,ignore,remind_later,reconnect [--recommended continue] [--timeout-mins 30] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--wait]
 
 Examples:
-  cc-connect decision ask --title "需要确认" --message "测试失败，需要改方案吗？" --choices "continue,abort,revise" --wait`)
+  cc-connect decision ask --title "需要确认" --message "测试失败，需要改方案吗？" --choices "continue,abort,revise,ignore,remind_later,reconnect" --wait`)
 }

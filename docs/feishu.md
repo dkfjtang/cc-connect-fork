@@ -139,7 +139,7 @@ default_user_id = "ou_xxx"
 cc-connect decision ask \
   --title "需要确认" \
   --message "测试失败，是否继续按当前方案修复？" \
-  --choices "continue,abort,revise" \
+  --choices "continue,abort,revise,ignore,remind_later,reconnect" \
   --recommended continue \
   --timeout-mins 30 \
   --wait
@@ -169,7 +169,7 @@ cc-connect watchdog checkpoint \
   --wait
 ```
 
-当 `--elapsed-mins` 小于 `--threshold-mins` 时，命令只输出 `watchdog=skipped`，不会打扰飞书。达到阈值后，它会发送一张个人决策卡片，默认选项为 `continue,pause,revise`。
+当 `--elapsed-mins` 小于 `--threshold-mins` 时，命令只输出 `watchdog=skipped`，不会打扰飞书。达到阈值后，它会发送一张个人决策卡片，默认选项为 `continue,pause,revise,ignore,remind_later,reconnect`。
 
 ---
 

@@ -35,7 +35,7 @@ func TestParseWatchdogCheckpointArgsDefaults(t *testing.T) {
 	if req.TimeoutMins != 30 {
 		t.Fatalf("TimeoutMins = %d", req.TimeoutMins)
 	}
-	if strings.Join(req.Choices, ",") != "continue,pause,revise" {
+	if strings.Join(req.Choices, ",") != "continue,pause,revise,ignore,remind_later,reconnect" {
 		t.Fatalf("Choices = %#v", req.Choices)
 	}
 	if req.Recommended != "continue" {

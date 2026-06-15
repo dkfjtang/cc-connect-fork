@@ -90,7 +90,7 @@ func runWatchdogCheckpoint(args []string) {
 func parseWatchdogCheckpointArgs(args []string) (core.DecisionAskRequest, watchdogCheckpointOptions, error) {
 	var task, summary, choices string
 	req := core.DecisionAskRequest{
-		Choices:     []string{"continue", "pause", "revise"},
+		Choices:     []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
 		Recommended: "continue",
 		TimeoutMins: 30,
 	}
@@ -239,7 +239,7 @@ func runWatchdogCheckpointWithClient(ctx context.Context, client *http.Client, b
 
 func printWatchdogUsage() {
 	fmt.Println(`Usage:
-  cc-connect watchdog checkpoint --task <name> --summary <text> --elapsed-mins <n> [--threshold-mins 10] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--wait]
+  cc-connect watchdog checkpoint --task <name> --summary <text> --elapsed-mins <n> [--threshold-mins 10] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--choices continue,pause,revise,ignore,remind_later,reconnect] [--wait]
 
 Examples:
   cc-connect watchdog checkpoint --task "生产发布复核" --summary "测试已运行 12 分钟，仍有 1 个失败用例" --elapsed-mins 12 --wait`)

@@ -269,6 +269,12 @@ func decisionChoiceLabel(choice string) string {
 		return "调整"
 	case "abort":
 		return "终止"
+	case "ignore":
+		return "忽略本次"
+	case "remind_later":
+		return "稍后提醒"
+	case "reconnect":
+		return "重连/唤醒"
 	default:
 		return choice
 	}
