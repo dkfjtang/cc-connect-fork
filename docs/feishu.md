@@ -156,7 +156,20 @@ comment=继续，先不要改生产配置
 
 - `--wait` 会阻塞当前命令，直到飞书侧完成选择或超时。
 - 默认超时是 30 分钟；超时后服务端会拒绝新的响应。
-- 当前阶段只实现显式决策请求；自动长任务状态提醒属于后续能力。
+- 对于长任务，可以让当前 Codex 会话主动调用 `cc-connect watchdog checkpoint`，按阈值触发同一套飞书决策卡片。
+
+长任务检查点示例：
+
+```bash
+cc-connect watchdog checkpoint \
+  --task "生产发布复核" \
+  --summary "测试已运行 12 分钟，仍有 1 个失败用例，需要确认下一步" \
+  --elapsed-mins 12 \
+  --threshold-mins 10 \
+  --wait
+```
+
+当 `--elapsed-mins` 小于 `--threshold-mins` 时，命令只输出 `watchdog=skipped`，不会打扰飞书。达到阈值后，它会发送一张个人决策卡片，默认选项为 `continue,pause,revise`。
 
 ---
 

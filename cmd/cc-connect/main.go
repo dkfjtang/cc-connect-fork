@@ -146,6 +146,9 @@ func main() {
 		case "decision":
 			runDecision(os.Args[2:])
 			return
+		case "watchdog":
+			runWatchdog(os.Args[2:])
+			return
 		case "cron":
 			runCron(os.Args[2:])
 			return

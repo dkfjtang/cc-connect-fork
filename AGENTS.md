@@ -173,6 +173,38 @@ go test -race ./...
 - Test card rendering by inspecting the returned `*Card` struct, not JSON
 - For agent session tests, simulate event streams via channels
 
+## Personal Feishu Watchdog Rules
+
+When the user asks to enable Feishu watchdog, unattended mode, long-task mode, or goal-mode monitoring, the active Codex session should request decisions through cc-connect instead of waiting for the user at the computer.
+
+Use explicit decision requests when a human choice is required:
+
+```bash
+cc-connect decision ask --title "<short title>" --message "<facts, options, risk>" --choices "continue,pause,revise" --recommended continue --timeout-mins 30 --wait
+```
+
+Use long-task checkpoints for ongoing work:
+
+```bash
+cc-connect watchdog checkpoint --task "<task name>" --summary "<current status and decision need>" --elapsed-mins <minutes> --threshold-mins 10 --wait
+```
+
+Trigger a Feishu decision request when:
+
+- the user explicitly says they are leaving the computer or wants Feishu watchdog enabled;
+- Codex goal mode is active and the task is likely to exceed 10 minutes;
+- the current task has already run for 10 minutes and still needs meaningful work;
+- a blocker needs user credentials, external account action, production approval, or a plan choice;
+- the next step is high risk, destructive, or hard to reverse.
+
+Interpret responses consistently:
+
+- `continue`: continue the current plan.
+- `pause`: stop and leave a concise resume report.
+- `revise`: treat the Feishu comment as updated user instruction.
+
+Do not attempt to monitor or control unrelated Codex sessions across sandbox boundaries. The session doing the work must call the watchdog command itself.
+
 ## Selective Compilation
 
 Each agent and platform is imported via a separate `plugin_*.go` file with a

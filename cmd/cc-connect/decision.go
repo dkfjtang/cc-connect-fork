@@ -179,6 +179,10 @@ func decisionHTTPClient(sockPath string) *http.Client {
 }
 
 func waitForDecision(ctx context.Context, client *http.Client, id string, interval time.Duration) (core.DecisionResponse, error) {
+	return waitForDecisionAt(ctx, client, "http://unix", id, interval)
+}
+
+func waitForDecisionAt(ctx context.Context, client *http.Client, baseURL, id string, interval time.Duration) (core.DecisionResponse, error) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 	for {
@@ -186,7 +190,7 @@ func waitForDecision(ctx context.Context, client *http.Client, id string, interv
 		case <-ctx.Done():
 			return core.DecisionResponse{}, ctx.Err()
 		case <-ticker.C:
-			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "http://unix/decision/get?id="+id, nil)
+			req, _ := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(baseURL, "/")+"/decision/get?id="+id, nil)
 			resp, err := client.Do(req)
 			if err != nil {
 				return core.DecisionResponse{}, err
