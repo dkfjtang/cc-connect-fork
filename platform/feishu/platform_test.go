@@ -433,8 +433,18 @@ func TestInteractivePlatform_DecisionCardActionResolvesWithComment(t *testing.T)
 	if err != nil {
 		t.Fatalf("onCardAction() error = %v", err)
 	}
-	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" {
-		t.Fatalf("response = %#v, want success toast", resp)
+	if resp == nil || resp.Toast == nil || resp.Toast.Type != "success" || resp.Card == nil {
+		t.Fatalf("response = %#v, want success toast with replacement card", resp)
+	}
+	cardBytes, _ := json.Marshal(resp.Card.Data)
+	cardJSON := string(cardBytes)
+	for _, want := range []string{"已收到决策", "选择结果", "继续"} {
+		if !strings.Contains(cardJSON, want) {
+			t.Fatalf("replacement card missing %q: %s", want, cardJSON)
+		}
+	}
+	if strings.Contains(cardJSON, "decision:respond") {
+		t.Fatalf("replacement card should not contain decision action: %s", cardJSON)
 	}
 
 	select {

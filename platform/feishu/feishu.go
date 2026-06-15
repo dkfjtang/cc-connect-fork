@@ -246,6 +246,19 @@ func buildDecisionCard(dec core.Decision) *core.Card {
 	return b.Build()
 }
 
+func buildDecisionResolvedCard(choice, comment string) *core.Card {
+	label := decisionChoiceLabel(choice)
+	if strings.TrimSpace(label) == "" {
+		label = "已处理"
+	}
+	b := core.NewCard().Title("已收到决策", "green").Markdown("选择结果: " + label)
+	if strings.TrimSpace(comment) != "" {
+		b.Markdown("补充说明: " + strings.TrimSpace(comment))
+	}
+	b.Note("该请求已处理，无需重复点击。")
+	return b.Build()
+}
+
 func decisionChoiceLabel(choice string) string {
 	switch strings.ToLower(strings.TrimSpace(choice)) {
 	case "continue":
@@ -815,7 +828,11 @@ func (p *Platform) onCardAction(event *callback.CardActionTriggerEvent) (*callba
 			}, nil
 		}
 		return &callback.CardActionTriggerResponse{
-			Toast: &callback.Toast{Type: "success", Content: "Decision received"},
+			Toast: &callback.Toast{Type: "success", Content: "已收到决策"},
+			Card: &callback.Card{
+				Type: "raw",
+				Data: renderCardMap(buildDecisionResolvedCard(choice, comment), sessionKey),
+			},
 		}, nil
 	}
 
