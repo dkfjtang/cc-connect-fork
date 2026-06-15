@@ -58,9 +58,9 @@ func NewAPIServer(dataDir string) (*APIServer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("listen unix socket: %w", err)
 	}
-	if err := os.Chmod(sockPath, 0o600); err != nil {
+	if err := applySocketPermissions(sockPath); err != nil {
 		_ = listener.Close()
-		return nil, fmt.Errorf("chmod socket: %w", err)
+		return nil, fmt.Errorf("set socket permissions: %w", err)
 	}
 
 	s := &APIServer{
