@@ -27,6 +27,7 @@ type watchdogCheckpointOptions struct {
 type watchdogCheckpointResult struct {
 	DecisionID string
 	Response   *core.DecisionResponse
+	Deduped    string
 }
 
 var errWatchdogUsage = errors.New("show watchdog usage")
@@ -76,6 +77,10 @@ func runWatchdogCheckpoint(args []string) {
 		os.Exit(1)
 	}
 	if result.Response == nil {
+		if result.Deduped != "" {
+			fmt.Print(result.Deduped)
+			return
+		}
 		fmt.Printf("decision_id=%s\n", result.DecisionID)
 		return
 	}
@@ -146,6 +151,28 @@ func parseWatchdogCheckpointArgs(args []string) (core.DecisionAskRequest, watchd
 				return req, opts, fmt.Errorf("--timeout-mins must be a positive integer")
 			}
 			req.TimeoutMins = n
+		case "--event-key":
+			if i+1 >= len(args) {
+				return req, opts, fmt.Errorf("--event-key requires a value")
+			}
+			i++
+			req.EventKey = strings.TrimSpace(args[i])
+		case "--event-fingerprint":
+			if i+1 >= len(args) {
+				return req, opts, fmt.Errorf("--event-fingerprint requires a value")
+			}
+			i++
+			req.EventFingerprint = strings.TrimSpace(args[i])
+		case "--cooldown-mins":
+			if i+1 >= len(args) {
+				return req, opts, fmt.Errorf("--cooldown-mins requires a value")
+			}
+			i++
+			n, err := strconv.Atoi(args[i])
+			if err != nil || n < 0 {
+				return req, opts, fmt.Errorf("--cooldown-mins must be a non-negative integer")
+			}
+			req.CooldownMins = n
 		case "--wait":
 			opts.Wait = true
 		case "--data-dir":
@@ -186,6 +213,9 @@ func runWatchdogCheckpointWithClient(ctx context.Context, client *http.Client, b
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == http.StatusAlreadyReported {
+		return watchdogCheckpointResult{Deduped: formatDecisionDedupedCLIResponse(body)}, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return watchdogCheckpointResult{}, fmt.Errorf("%s", strings.TrimSpace(string(body)))
 	}
@@ -209,7 +239,7 @@ func runWatchdogCheckpointWithClient(ctx context.Context, client *http.Client, b
 
 func printWatchdogUsage() {
 	fmt.Println(`Usage:
-  cc-connect watchdog checkpoint --task <name> --summary <text> --elapsed-mins <n> [--threshold-mins 10] [--wait]
+  cc-connect watchdog checkpoint --task <name> --summary <text> --elapsed-mins <n> [--threshold-mins 10] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--wait]
 
 Examples:
   cc-connect watchdog checkpoint --task "生产发布复核" --summary "测试已运行 12 分钟，仍有 1 个失败用例" --elapsed-mins 12 --wait`)

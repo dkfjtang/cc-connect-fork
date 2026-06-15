@@ -116,6 +116,55 @@ func TestDecisionAPIAskRollsBackWhenNotifierFails(t *testing.T) {
 	}
 }
 
+func TestDecisionAPIAskDedupesSameEventFingerprintDuringCooldown(t *testing.T) {
+	notifier := &stubDecisionNotifier{}
+	ledger := NewNotificationLedger("")
+	api := &APIServer{decisions: NewDecisionStore(), notificationLedger: ledger}
+	api.SetDecisionNotifier(notifier)
+
+	body := strings.NewReader(`{"title":"Need confirmation","message":"Proceed?","choices":["continue"],"timeout_mins":1,"event_key":"thread-1:blocked","event_fingerprint":"last-message-1","cooldown_mins":30}`)
+	rec := httptest.NewRecorder()
+	api.handleDecisionAsk(rec, httptest.NewRequest(http.MethodPost, "/decision/ask", body))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("first ask status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(notifier.sent) != 1 {
+		t.Fatalf("sent decisions = %d, want 1", len(notifier.sent))
+	}
+
+	body = strings.NewReader(`{"title":"Need confirmation","message":"Proceed?","choices":["continue"],"timeout_mins":1,"event_key":"thread-1:blocked","event_fingerprint":"last-message-1","cooldown_mins":30}`)
+	rec = httptest.NewRecorder()
+	api.handleDecisionAsk(rec, httptest.NewRequest(http.MethodPost, "/decision/ask", body))
+	if rec.Code != http.StatusAlreadyReported {
+		t.Fatalf("duplicate ask status = %d body=%s", rec.Code, rec.Body.String())
+	}
+	if len(notifier.sent) != 1 {
+		t.Fatalf("sent decisions = %d, want still 1", len(notifier.sent))
+	}
+	if !strings.Contains(rec.Body.String(), `"deduped":true`) {
+		t.Fatalf("duplicate body missing deduped flag: %s", rec.Body.String())
+	}
+}
+
+func TestDecisionAPIAskNotifiesWhenFingerprintChanges(t *testing.T) {
+	notifier := &stubDecisionNotifier{}
+	ledger := NewNotificationLedger("")
+	api := &APIServer{decisions: NewDecisionStore(), notificationLedger: ledger}
+	api.SetDecisionNotifier(notifier)
+
+	for _, fingerprint := range []string{"last-message-1", "last-message-2"} {
+		body := strings.NewReader(`{"title":"Need confirmation","message":"Proceed?","choices":["continue"],"timeout_mins":1,"event_key":"thread-1:blocked","event_fingerprint":"` + fingerprint + `","cooldown_mins":30}`)
+		rec := httptest.NewRecorder()
+		api.handleDecisionAsk(rec, httptest.NewRequest(http.MethodPost, "/decision/ask", body))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("ask status = %d body=%s", rec.Code, rec.Body.String())
+		}
+	}
+	if len(notifier.sent) != 2 {
+		t.Fatalf("sent decisions = %d, want 2", len(notifier.sent))
+	}
+}
+
 func TestDecisionAPIRespondErrors(t *testing.T) {
 	api := &APIServer{decisions: NewDecisionStore()}
 	dec, err := api.decisionStore().Create(DecisionAskRequest{Title: "T", Message: "M", Choices: []string{"yes"}, Timeout: time.Minute})

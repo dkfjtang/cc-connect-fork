@@ -183,10 +183,16 @@ Use explicit decision requests when a human choice is required:
 cc-connect decision ask --title "<short title>" --message "<facts, options, risk>" --choices "continue,pause,revise" --recommended continue --timeout-mins 30 --wait
 ```
 
+For recurring monitors or repeated checkpoints, include deduplication fields so the same event does not repeatedly notify Feishu:
+
+```bash
+cc-connect decision ask --title "<short title>" --message "<facts, options, risk>" --choices "continue,pause,revise" --recommended continue --timeout-mins 30 --event-key "<thread-or-task>:<status>" --event-fingerprint "<last-turn-or-error-hash>" --cooldown-mins 30 --wait
+```
+
 Use long-task checkpoints for ongoing work:
 
 ```bash
-cc-connect watchdog checkpoint --task "<task name>" --summary "<current status and decision need>" --elapsed-mins <minutes> --threshold-mins 10 --wait
+cc-connect watchdog checkpoint --task "<task name>" --summary "<current status and decision need>" --elapsed-mins <minutes> --threshold-mins 10 --event-key "<thread-or-task>:checkpoint" --event-fingerprint "<last-turn-or-status-hash>" --cooldown-mins 30 --wait
 ```
 
 Trigger a Feishu decision request when:

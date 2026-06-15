@@ -36,6 +36,29 @@ func TestParseDecisionAskArgsDefaults(t *testing.T) {
 	}
 }
 
+func TestParseDecisionAskArgsNotificationDedup(t *testing.T) {
+	req, _, err := parseDecisionAskArgs([]string{
+		"--title", "Need confirmation",
+		"--message", "Proceed?",
+		"--choices", "continue,revise",
+		"--event-key", "thread-1:blocked",
+		"--event-fingerprint", "last-message-1",
+		"--cooldown-mins", "30",
+	})
+	if err != nil {
+		t.Fatalf("parse error = %v", err)
+	}
+	if req.EventKey != "thread-1:blocked" {
+		t.Fatalf("EventKey = %q", req.EventKey)
+	}
+	if req.EventFingerprint != "last-message-1" {
+		t.Fatalf("EventFingerprint = %q", req.EventFingerprint)
+	}
+	if req.CooldownMins != 30 {
+		t.Fatalf("CooldownMins = %d", req.CooldownMins)
+	}
+}
+
 func TestFormatDecisionCLIResponse(t *testing.T) {
 	got := formatDecisionCLIResponse("continue", "Use proxy\nif slow.")
 	want := "choice=continue\ncomment=\"Use proxy\\nif slow.\"\n"

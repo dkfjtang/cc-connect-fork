@@ -43,6 +43,29 @@ func TestParseWatchdogCheckpointArgsDefaults(t *testing.T) {
 	}
 }
 
+func TestParseWatchdogCheckpointArgsNotificationDedup(t *testing.T) {
+	req, _, err := parseWatchdogCheckpointArgs([]string{
+		"--task", "release gate",
+		"--summary", "tests are still running",
+		"--elapsed-mins", "30",
+		"--event-key", "thread-1:checkpoint",
+		"--event-fingerprint", "turn-123",
+		"--cooldown-mins", "30",
+	})
+	if err != nil {
+		t.Fatalf("parseWatchdogCheckpointArgs error = %v", err)
+	}
+	if req.EventKey != "thread-1:checkpoint" {
+		t.Fatalf("EventKey = %q", req.EventKey)
+	}
+	if req.EventFingerprint != "turn-123" {
+		t.Fatalf("EventFingerprint = %q", req.EventFingerprint)
+	}
+	if req.CooldownMins != 30 {
+		t.Fatalf("CooldownMins = %d", req.CooldownMins)
+	}
+}
+
 func TestParseWatchdogCheckpointSkipsBelowThreshold(t *testing.T) {
 	_, opts, err := parseWatchdogCheckpointArgs([]string{
 		"--task", "index rebuild",
@@ -133,5 +156,33 @@ func TestRunWatchdogCheckpointNoWait(t *testing.T) {
 	}
 	if resp.Response != nil {
 		t.Fatalf("Response = %#v, want nil", resp.Response)
+	}
+}
+
+func TestRunWatchdogCheckpointDeduped(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/decision/ask" {
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAlreadyReported)
+		w.Write([]byte(`{"deduped":true,"event_key":"thread-1:blocked","event_fingerprint":"turn-1","decision_id":"dec_1"}`))
+	}))
+	defer server.Close()
+
+	resp, err := runWatchdogCheckpointWithClient(context.Background(), server.Client(), server.URL, core.DecisionAskRequest{
+		Title:            "长任务需要确认: release",
+		Message:          "status",
+		Choices:          []string{"continue", "pause", "revise"},
+		EventKey:         "thread-1:blocked",
+		EventFingerprint: "turn-1",
+		CooldownMins:     30,
+		TimeoutMins:      30,
+	}, watchdogCheckpointOptions{})
+	if err != nil {
+		t.Fatalf("runWatchdogCheckpointWithClient error = %v", err)
+	}
+	if !strings.Contains(resp.Deduped, "notification=deduped") || !strings.Contains(resp.Deduped, "decision_id=dec_1") {
+		t.Fatalf("Deduped = %q", resp.Deduped)
 	}
 }

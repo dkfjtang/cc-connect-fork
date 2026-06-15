@@ -20,12 +20,15 @@ var (
 )
 
 type DecisionAskRequest struct {
-	Title       string        `json:"title"`
-	Message     string        `json:"message"`
-	Choices     []string      `json:"choices"`
-	Recommended string        `json:"recommended,omitempty"`
-	Timeout     time.Duration `json:"-"`
-	TimeoutMins int           `json:"timeout_mins,omitempty"`
+	Title            string        `json:"title"`
+	Message          string        `json:"message"`
+	Choices          []string      `json:"choices"`
+	Recommended      string        `json:"recommended,omitempty"`
+	Timeout          time.Duration `json:"-"`
+	TimeoutMins      int           `json:"timeout_mins,omitempty"`
+	EventKey         string        `json:"event_key,omitempty"`
+	EventFingerprint string        `json:"event_fingerprint,omitempty"`
+	CooldownMins     int           `json:"cooldown_mins,omitempty"`
 }
 
 type Decision struct {

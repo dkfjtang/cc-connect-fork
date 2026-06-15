@@ -23,6 +23,9 @@ cc-connect decision ask \
   --message "测试失败，是否继续按当前方案修复？" \
   --choices "continue,abort,revise" \
   --recommended continue \
+  --event-key "smoke:decision" \
+  --event-fingerprint "test-failure-v1" \
+  --cooldown-mins 30 \
   --timeout-mins 30 \
   --wait
 ```
@@ -70,6 +73,9 @@ cc-connect watchdog checkpoint \
   --summary "<current state and decision needed>" \
   --elapsed-mins <minutes> \
   --threshold-mins 10 \
+  --event-key "<thread-or-task>:checkpoint" \
+  --event-fingerprint "<last-turn-or-status-hash>" \
+  --cooldown-mins 30 \
   --wait
 ```
 
@@ -89,6 +95,14 @@ Command behavior:
 - If the threshold is reached, it sends a personal Feishu decision card.
 - With `--wait`, it blocks until the user chooses an option or the request times out.
 - Without `--wait`, it prints the decision ID and returns.
+- With `--event-key`, `--event-fingerprint`, and `--cooldown-mins`, repeated monitors can suppress duplicate Feishu notifications for the same unchanged event.
+
+Deduplication guidance:
+
+- Use a stable `event-key` such as `<thread-id>:blocked`, `<thread-id>:decision`, `<thread-id>:interrupted`, or `<task-name>:checkpoint`.
+- Use `event-fingerprint` for the content that must change before notifying again, such as the latest turn ID, last message hash, error hash, or status summary hash.
+- Use `--cooldown-mins 30` for the default 15-minute巡检 cadence, so only two consecutive unchanged巡检 cycles can escalate.
+- If the CLI prints `notification=deduped`, treat it as a successful no-op, not a failure.
 
 Recommended thresholds:
 

@@ -19,16 +19,17 @@ import (
 // APIServer exposes a local Unix socket API for external tools (e.g. cron jobs)
 // to send messages to active sessions.
 type APIServer struct {
-	socketPath       string
-	listener         net.Listener
-	server           *http.Server
-	mux              *http.ServeMux
-	engines          map[string]*Engine // project name → engine
-	cron             *CronScheduler
-	relay            *RelayManager
-	decisions        *DecisionStore
-	decisionNotifier DecisionNotifier
-	mu               sync.RWMutex
+	socketPath         string
+	listener           net.Listener
+	server             *http.Server
+	mux                *http.ServeMux
+	engines            map[string]*Engine // project name → engine
+	cron               *CronScheduler
+	relay              *RelayManager
+	decisions          *DecisionStore
+	decisionNotifier   DecisionNotifier
+	notificationLedger *NotificationLedger
+	mu                 sync.RWMutex
 }
 
 // SendRequest is the JSON body for POST /send.
@@ -63,11 +64,12 @@ func NewAPIServer(dataDir string) (*APIServer, error) {
 	}
 
 	s := &APIServer{
-		socketPath: sockPath,
-		listener:   listener,
-		mux:        http.NewServeMux(),
-		engines:    make(map[string]*Engine),
-		decisions:  NewDecisionStore(),
+		socketPath:         sockPath,
+		listener:           listener,
+		mux:                http.NewServeMux(),
+		engines:            make(map[string]*Engine),
+		decisions:          NewDecisionStore(),
+		notificationLedger: NewNotificationLedger(filepath.Join(dataDir, "notifications", "ledger.json")),
 	}
 	s.mux.HandleFunc("/send", s.handleSend)
 	s.mux.HandleFunc("/sessions", s.handleSessions)
@@ -142,6 +144,15 @@ func (s *APIServer) decisionStore() *DecisionStore {
 		s.decisions = NewDecisionStore()
 	}
 	return s.decisions
+}
+
+func (s *APIServer) notificationDedup() *NotificationLedger {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.notificationLedger == nil {
+		s.notificationLedger = NewNotificationLedger("")
+	}
+	return s.notificationLedger
 }
 
 func (s *APIServer) Start() {
@@ -234,6 +245,19 @@ func (s *APIServer) handleDecisionAsk(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	ledger := s.notificationDedup()
+	cooldownMins := req.CooldownMins
+	if cooldownMins < 0 {
+		http.Error(w, "cooldown_mins must be non-negative", http.StatusBadRequest)
+		return
+	}
+	if cooldownMins > 0 {
+		dedup := ledger.ShouldNotify(req.EventKey, req.EventFingerprint, time.Duration(cooldownMins)*time.Minute)
+		if dedup.Deduped {
+			apiJSON(w, http.StatusAlreadyReported, dedup)
+			return
+		}
+	}
 	store := s.decisionStore()
 	dec, err := store.Create(req)
 	if err != nil {
@@ -252,6 +276,9 @@ func (s *APIServer) handleDecisionAsk(w http.ResponseWriter, r *http.Request) {
 		store.Delete(dec.ID)
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
+	}
+	if cooldownMins > 0 {
+		ledger.Record(req.EventKey, req.EventFingerprint, dec.ID, cooldownMins)
 	}
 	apiJSON(w, http.StatusOK, dec)
 }

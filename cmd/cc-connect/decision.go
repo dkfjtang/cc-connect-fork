@@ -72,6 +72,10 @@ func runDecisionAsk(args []string) {
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode == http.StatusAlreadyReported {
+		fmt.Print(formatDecisionDedupedCLIResponse(body))
+		return
+	}
 	if resp.StatusCode != http.StatusOK {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", strings.TrimSpace(string(body)))
 		os.Exit(1)
@@ -135,6 +139,28 @@ func parseDecisionAskArgs(args []string) (core.DecisionAskRequest, decisionCLIOp
 				return req, opts, fmt.Errorf("--timeout-mins must be a positive integer")
 			}
 			req.TimeoutMins = n
+		case "--event-key":
+			if i+1 >= len(args) {
+				return req, opts, fmt.Errorf("--event-key requires a value")
+			}
+			i++
+			req.EventKey = strings.TrimSpace(args[i])
+		case "--event-fingerprint":
+			if i+1 >= len(args) {
+				return req, opts, fmt.Errorf("--event-fingerprint requires a value")
+			}
+			i++
+			req.EventFingerprint = strings.TrimSpace(args[i])
+		case "--cooldown-mins":
+			if i+1 >= len(args) {
+				return req, opts, fmt.Errorf("--cooldown-mins requires a value")
+			}
+			i++
+			n, err := strconv.Atoi(args[i])
+			if err != nil || n < 0 {
+				return req, opts, fmt.Errorf("--cooldown-mins must be a non-negative integer")
+			}
+			req.CooldownMins = n
 		case "--wait":
 			opts.Wait = true
 		case "--data-dir":
@@ -221,9 +247,31 @@ func formatDecisionCLIResponse(choice, comment string) string {
 	return fmt.Sprintf("choice=%s\ncomment=%q\n", strings.TrimSpace(choice), strings.TrimSpace(comment))
 }
 
+func formatDecisionDedupedCLIResponse(body []byte) string {
+	var result core.NotificationDedupResult
+	if err := json.Unmarshal(body, &result); err != nil {
+		return "notification=deduped\n"
+	}
+	var b strings.Builder
+	b.WriteString("notification=deduped\n")
+	if result.EventKey != "" {
+		fmt.Fprintf(&b, "event_key=%q\n", result.EventKey)
+	}
+	if result.Fingerprint != "" {
+		fmt.Fprintf(&b, "event_fingerprint=%q\n", result.Fingerprint)
+	}
+	if result.DecisionID != "" {
+		fmt.Fprintf(&b, "decision_id=%s\n", result.DecisionID)
+	}
+	if !result.CooldownEnds.IsZero() {
+		fmt.Fprintf(&b, "cooldown_ends_at=%s\n", result.CooldownEnds.Format(time.RFC3339))
+	}
+	return b.String()
+}
+
 func printDecisionUsage() {
 	fmt.Println(`Usage:
-  cc-connect decision ask --title <text> --message <text> --choices continue,abort,revise [--recommended continue] [--timeout-mins 30] [--wait]
+  cc-connect decision ask --title <text> --message <text> --choices continue,abort,revise [--recommended continue] [--timeout-mins 30] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--wait]
 
 Examples:
   cc-connect decision ask --title "需要确认" --message "测试失败，需要改方案吗？" --choices "continue,abort,revise" --wait`)
