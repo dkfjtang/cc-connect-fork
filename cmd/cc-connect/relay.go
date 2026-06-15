@@ -27,7 +27,7 @@ func runRelay(args []string) {
 }
 
 func runRelaySend(args []string) {
-	var from, to, sessionKey, message, dataDir string
+	var from, to, sessionKey, message, dataDir, token string
 
 	var positional []string
 	for i := 0; i < len(args); i++ {
@@ -56,6 +56,11 @@ func runRelaySend(args []string) {
 			if i+1 < len(args) {
 				i++
 				dataDir = args[i]
+			}
+		case "--local-api-token":
+			if i+1 < len(args) {
+				i++
+				token = args[i]
 			}
 		case "--help", "-h":
 			printRelaySendUsage()
@@ -95,6 +100,7 @@ func runRelaySend(args []string) {
 		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
 	}
+	token = loadLocalAPIToken(localAPIOptions{DataDir: dataDir, Token: token})
 
 	payload, _ := json.Marshal(map[string]string{
 		"from":        from,
@@ -103,7 +109,7 @@ func runRelaySend(args []string) {
 		"message":     message,
 	})
 
-	resp, err := apiPost(sockPath, "/relay/send", payload)
+	resp, err := apiPost(sockPath, "/relay/send", payload, token)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -146,6 +152,7 @@ Options:
   -s, --session-key <key>    Session key (auto-detected from CC_SESSION_KEY env)
   -m, --message <text>       Message to send
       --data-dir <path>      Data directory (default: ~/.cc-connect)
+      --local-api-token <t>  Local API token if configured in [local_api]
   -h, --help                 Show this help
 
 Examples:

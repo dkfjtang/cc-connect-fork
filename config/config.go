@@ -108,6 +108,7 @@ type Config struct {
 	Queue              QueueConfig             `toml:"queue"`
 	Webhook            WebhookConfig           `toml:"webhook"`
 	Bridge             BridgeConfig            `toml:"bridge"`
+	LocalAPI           LocalAPIConfig          `toml:"local_api"`
 	Management         ManagementConfig        `toml:"management"`
 	Notify             NotifyConfig            `toml:"notify"`
 	Watchdog           WatchdogConfig          `toml:"watchdog"`
@@ -149,6 +150,11 @@ type BridgeConfig struct {
 	Path        string   `toml:"path,omitempty"`         // URL path; default "/bridge/ws"
 	CORSOrigins []string `toml:"cors_origins,omitempty"` // allowed CORS origins; empty = no CORS
 	Insecure    *bool    `toml:"insecure,omitempty"`     // allow running without token (local dev only); default false
+}
+
+// LocalAPIConfig controls the internal Unix-socket API used by cc-connect CLI helpers.
+type LocalAPIConfig struct {
+	Token string `toml:"token,omitempty"` // optional shared secret; empty = rely on local socket permissions
 }
 
 // HookConfig is a single event hook rule.

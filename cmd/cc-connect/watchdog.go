@@ -19,6 +19,7 @@ import (
 type watchdogCheckpointOptions struct {
 	DataDir       string
 	ConfigPath    string
+	Token         string
 	Wait          bool
 	Skip          bool
 	ElapsedMins   int
@@ -71,7 +72,8 @@ func runWatchdogCheckpoint(args []string) {
 		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
 	}
-	client := decisionHTTPClient(sockPath)
+	token := loadLocalAPIToken(localAPIOptions{ConfigPath: opts.ConfigPath, DataDir: opts.DataDir, Token: opts.Token})
+	client := decisionHTTPClient(sockPath, token)
 	result, err := runWatchdogCheckpointWithClient(context.Background(), client, "http://unix", req, opts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -176,6 +178,12 @@ func parseWatchdogCheckpointArgs(args []string) (core.DecisionAskRequest, watchd
 			req.CooldownMins = n
 		case "--wait":
 			opts.Wait = true
+		case "--local-api-token":
+			if i+1 >= len(args) {
+				return req, opts, fmt.Errorf("--local-api-token requires a value")
+			}
+			i++
+			opts.Token = args[i]
 		case "--data-dir":
 			if i+1 >= len(args) {
 				return req, opts, fmt.Errorf("--data-dir requires a value")
@@ -214,7 +222,12 @@ func runWatchdogCheckpointWithClient(ctx context.Context, client *http.Client, b
 	if err != nil {
 		return watchdogCheckpointResult{}, fmt.Errorf("encode watchdog decision payload: %w", err)
 	}
-	resp, err := client.Post(strings.TrimRight(baseURL, "/")+"/decision/ask", "application/json", bytes.NewReader(payload))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(baseURL, "/")+"/decision/ask", bytes.NewReader(payload))
+	if err != nil {
+		return watchdogCheckpointResult{}, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		return watchdogCheckpointResult{}, err
 	}
@@ -246,7 +259,7 @@ func runWatchdogCheckpointWithClient(ctx context.Context, client *http.Client, b
 
 func printWatchdogUsage() {
 	fmt.Println(`Usage:
-  cc-connect watchdog checkpoint --task <name> --summary <text> --elapsed-mins <n> [--threshold-mins 10] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--choices continue,pause,revise,ignore,remind_later,reconnect] [--config path | --data-dir dir] [--wait]
+  cc-connect watchdog checkpoint --task <name> --summary <text> --elapsed-mins <n> [--threshold-mins 10] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--choices continue,pause,revise,ignore,remind_later,reconnect] [--config path | --data-dir dir] [--local-api-token token] [--wait]
 
 Examples:
   cc-connect watchdog checkpoint --task "生产发布复核" --summary "测试已运行 12 分钟，仍有 1 个失败用例" --elapsed-mins 12 --wait`)

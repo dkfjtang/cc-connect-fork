@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,7 @@ type APIServer struct {
 	decisions          *DecisionStore
 	decisionNotifier   DecisionNotifier
 	notificationLedger *NotificationLedger
+	localAPIToken      string
 	mu                 sync.RWMutex
 }
 
@@ -45,6 +47,12 @@ type SendRequest struct {
 
 // NewAPIServer creates an API server on a Unix socket.
 func NewAPIServer(dataDir string) (*APIServer, error) {
+	return NewAPIServerWithToken(dataDir, "")
+}
+
+// NewAPIServerWithToken creates an API server on a Unix socket. If token is
+// set, every request over the local socket must authenticate with it.
+func NewAPIServerWithToken(dataDir, token string) (*APIServer, error) {
 	sockDir := filepath.Join(dataDir, "run")
 	if err := os.MkdirAll(sockDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create run dir: %w", err)
@@ -70,6 +78,7 @@ func NewAPIServer(dataDir string) (*APIServer, error) {
 		engines:            make(map[string]*Engine),
 		decisions:          NewDecisionStore(),
 		notificationLedger: NewNotificationLedger(filepath.Join(dataDir, "notifications", "ledger.json")),
+		localAPIToken:      strings.TrimSpace(token),
 	}
 	s.mux.HandleFunc("/send", s.handleSend)
 	s.mux.HandleFunc("/sessions", s.handleSessions)
@@ -156,13 +165,34 @@ func (s *APIServer) notificationDedup() *NotificationLedger {
 }
 
 func (s *APIServer) Start() {
-	s.server = &http.Server{Handler: s.mux}
+	s.server = &http.Server{Handler: s.authenticateLocalAPI(s.mux)}
 	go func() {
 		if err := s.server.Serve(s.listener); err != nil && err != http.ErrServerClosed {
 			slog.Error("api server error", "error", err)
 		}
 	}()
 	slog.Info("api server started", "socket", s.socketPath)
+}
+
+func (s *APIServer) authenticateLocalAPI(next http.Handler) http.Handler {
+	if strings.TrimSpace(s.localAPIToken) == "" {
+		return next
+	}
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got := strings.TrimSpace(r.Header.Get("X-CC-Connect-Token"))
+		if got == "" {
+			auth := strings.TrimSpace(r.Header.Get("Authorization"))
+			const prefix = "Bearer "
+			if len(auth) >= len(prefix) && strings.EqualFold(auth[:len(prefix)], prefix) {
+				got = strings.TrimSpace(auth[len(prefix):])
+			}
+		}
+		if subtle.ConstantTimeCompare([]byte(got), []byte(s.localAPIToken)) != 1 {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *APIServer) Stop() {

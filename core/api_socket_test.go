@@ -53,6 +53,59 @@ func TestNewAPIServerSocketAcceptsLocalClient(t *testing.T) {
 	}
 }
 
+func TestAPIServerLocalAPIToken(t *testing.T) {
+	api, err := NewAPIServerWithToken(apiTestTempDir(t), "secret-token")
+	if err != nil {
+		t.Fatalf("NewAPIServerWithToken error = %v", err)
+	}
+	api.Start()
+	defer api.Stop()
+
+	client := apiSocketHTTPClient(api.SocketPath())
+	resp, err := client.Get("http://unix/sessions")
+	if err != nil {
+		t.Fatalf("GET without token error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("GET without token status = %d, want 401", resp.StatusCode)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, "http://unix/sessions", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer secret-token")
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Fatalf("GET with bearer token error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET with bearer token status = %d, want 200", resp.StatusCode)
+	}
+
+	req, err = http.NewRequest(http.MethodGet, "http://unix/sessions", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("X-CC-Connect-Token", "secret-token")
+	resp, err = client.Do(req)
+	if err != nil {
+		t.Fatalf("GET with header token error = %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET with header token status = %d, want 200", resp.StatusCode)
+	}
+}
+
+func apiSocketHTTPClient(sockPath string) *http.Client {
+	return &http.Client{Transport: &http.Transport{DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+		return net.DialTimeout("unix", filepath.Clean(sockPath), time.Second)
+	}}}
+}
+
 func apiTestTempDir(t *testing.T) string {
 	t.Helper()
 	if runtime.GOOS != "windows" {

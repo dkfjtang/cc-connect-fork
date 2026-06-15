@@ -70,6 +70,29 @@ func TestResolveSocketPath_UsesConfigDataDir(t *testing.T) {
 	}
 }
 
+func TestLoadLocalAPITokenFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	configPath := filepath.Join(dir, "config.toml")
+	if err := os.WriteFile(configPath, []byte("[local_api]\ntoken = \"from-config\"\n"), 0o644); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	got := loadLocalAPIToken(localAPIOptions{ConfigPath: configPath})
+	if got != "from-config" {
+		t.Fatalf("token = %q, want from-config", got)
+	}
+}
+
+func TestLoadLocalAPITokenPrefersExplicitThenEnv(t *testing.T) {
+	t.Setenv("CC_CONNECT_LOCAL_API_TOKEN", "from-env")
+	if got := loadLocalAPIToken(localAPIOptions{Token: "from-flag"}); got != "from-flag" {
+		t.Fatalf("explicit token = %q, want from-flag", got)
+	}
+	if got := loadLocalAPIToken(localAPIOptions{}); got != "from-env" {
+		t.Fatalf("env token = %q, want from-env", got)
+	}
+}
+
 func TestResolveSocketPath_DiscoversRunningConfigLock(t *testing.T) {
 	dir := t.TempDir()
 	dataDir := filepath.Join(dir, "service-data")

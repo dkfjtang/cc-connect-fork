@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -21,6 +20,7 @@ type decisionCLIOptions struct {
 	DataDir    string
 	ConfigPath string
 	Wait       bool
+	Token      string
 }
 
 var errDecisionUsage = errors.New("show decision usage")
@@ -60,13 +60,21 @@ func runDecisionAsk(args []string) {
 		os.Exit(1)
 	}
 
-	client := decisionHTTPClient(sockPath)
+	token := loadLocalAPIToken(localAPIOptions{ConfigPath: opts.ConfigPath, DataDir: opts.DataDir, Token: opts.Token})
+	client := decisionHTTPClient(sockPath, token)
 	payload, err := json.Marshal(req)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to encode decision payload: %v\n", err)
 		os.Exit(1)
 	}
-	resp, err := client.Post("http://unix/decision/ask", "application/json", bytes.NewReader(payload))
+	httpReq, err := http.NewRequest(http.MethodPost, "http://unix/decision/ask", bytes.NewReader(payload))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: build request: %v\n", err)
+		os.Exit(1)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	attachLocalAPIAuth(httpReq, token)
+	resp, err := client.Do(httpReq)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: failed to connect: %v\n", err)
 		os.Exit(1)
@@ -164,6 +172,12 @@ func parseDecisionAskArgs(args []string) (core.DecisionAskRequest, decisionCLIOp
 			req.CooldownMins = n
 		case "--wait":
 			opts.Wait = true
+		case "--local-api-token":
+			if i+1 >= len(args) {
+				return req, opts, fmt.Errorf("--local-api-token requires a value")
+			}
+			i++
+			opts.Token = args[i]
 		case "--data-dir":
 			if i+1 >= len(args) {
 				return req, opts, fmt.Errorf("--data-dir requires a value")
@@ -205,10 +219,8 @@ func splitDecisionCSV(s string) []string {
 	return out
 }
 
-func decisionHTTPClient(sockPath string) *http.Client {
-	return &http.Client{Transport: &http.Transport{DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-		return net.Dial("unix", sockPath)
-	}}}
+func decisionHTTPClient(sockPath, token string) *http.Client {
+	return localAPIClient(sockPath, token)
 }
 
 func waitForDecision(ctx context.Context, client *http.Client, id string, interval time.Duration) (core.DecisionResponse, error) {
@@ -278,7 +290,7 @@ func formatDecisionDedupedCLIResponse(body []byte) string {
 
 func printDecisionUsage() {
 	fmt.Println(`Usage:
-  cc-connect decision ask --title <text> --message <text> --choices continue,abort,revise,ignore,remind_later,reconnect [--recommended continue] [--timeout-mins 30] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--config path | --data-dir dir] [--wait]
+  cc-connect decision ask --title <text> --message <text> --choices continue,abort,revise,ignore,remind_later,reconnect [--recommended continue] [--timeout-mins 30] [--event-key key --event-fingerprint fp --cooldown-mins 30] [--config path | --data-dir dir] [--local-api-token token] [--wait]
 
 Examples:
   cc-connect decision ask --title "需要确认" --message "测试失败，需要改方案吗？" --choices "continue,abort,revise,ignore,remind_later,reconnect" --wait`)

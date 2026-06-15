@@ -360,6 +360,18 @@ level = "info" # debug, info, warn, error
 # path = "/bridge/ws"                 # URL path (default: "/bridge/ws") / URL 路径
 
 # =============================================================================
+# Local API (CLI helpers over local Unix socket)
+# 本地 API（CLI 通过本地 Unix socket 调用）
+# =============================================================================
+# Optional token for cc-connect CLI helpers such as send, cron, decision, and watchdog.
+# Keep empty to rely on local socket permissions only.
+# 可选认证密钥，用于 send、cron、decision、watchdog 等本地 CLI 调用。
+# 留空时仅依赖本地 socket 文件权限。
+#
+# [local_api]
+# token = "${CC_CONNECT_LOCAL_API_TOKEN}"
+
+# =============================================================================
 # Management API (External Management Tools)
 # 管理 API（外部管理工具）
 # =============================================================================

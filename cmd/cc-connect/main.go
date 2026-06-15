@@ -902,7 +902,7 @@ func main() {
 	// Create the internal API server before platforms start so decision card
 	// callbacks cannot race with DecisionResponder wiring during startup.
 	var apiSrv *core.APIServer
-	apiSrv, err = core.NewAPIServer(cfg.DataDir)
+	apiSrv, err = core.NewAPIServerWithToken(cfg.DataDir, cfg.LocalAPI.Token)
 	if err != nil {
 		slog.Warn("api server unavailable", "error", err)
 	} else {

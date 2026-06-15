@@ -2,11 +2,9 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -57,7 +55,7 @@ func closeCronResponseBody(body io.Closer) {
 }
 
 func runCronAdd(args []string) {
-	var project, sessionKey, cronExpr, prompt, execCmd, desc, dataDir, sessionMode string
+	var project, sessionKey, cronExpr, prompt, execCmd, desc, dataDir, sessionMode, token string
 	var timeoutMins *int
 
 	var positional []string
@@ -97,6 +95,11 @@ func runCronAdd(args []string) {
 			if i+1 < len(args) {
 				i++
 				dataDir = args[i]
+			}
+		case "--local-api-token":
+			if i+1 < len(args) {
+				i++
+				token = args[i]
 			}
 		case "--session-mode":
 			if i+1 < len(args) {
@@ -154,6 +157,7 @@ func runCronAdd(args []string) {
 		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
 	}
+	token = loadLocalAPIToken(localAPIOptions{DataDir: dataDir, Token: token})
 
 	body := map[string]any{
 		"project":     project,
@@ -171,7 +175,7 @@ func runCronAdd(args []string) {
 	}
 	payload, _ := json.Marshal(body)
 
-	resp, err := apiPost(sockPath, "/cron/add", payload)
+	resp, err := apiPost(sockPath, "/cron/add", payload, token)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -199,7 +203,7 @@ func runCronAdd(args []string) {
 }
 
 func runCronList(args []string) {
-	var project, dataDir string
+	var project, dataDir, token string
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--project", "-p":
@@ -211,6 +215,11 @@ func runCronList(args []string) {
 			if i+1 < len(args) {
 				i++
 				dataDir = args[i]
+			}
+		case "--local-api-token":
+			if i+1 < len(args) {
+				i++
+				token = args[i]
 			}
 		}
 	}
@@ -224,21 +233,22 @@ func runCronList(args []string) {
 		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
 	}
+	token = loadLocalAPIToken(localAPIOptions{DataDir: dataDir, Token: token})
 
 	url := "/cron/list"
 	if project != "" {
 		url += "?project=" + project
 	}
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", sockPath)
-			},
-		},
-	}
+	client := localAPIClient(sockPath, token)
 
-	resp, err := client.Get("http://unix" + url)
+	req, err := http.NewRequest(http.MethodGet, "http://unix"+url, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	attachLocalAPIAuth(req, token)
+	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -289,13 +299,18 @@ func runCronList(args []string) {
 }
 
 func runCronExec(args []string) {
-	var id, dataDir string
+	var id, dataDir, token string
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--data-dir":
 			if i+1 < len(args) {
 				i++
 				dataDir = args[i]
+			}
+		case "--local-api-token":
+			if i+1 < len(args) {
+				i++
+				token = args[i]
 			}
 		case "--help", "-h":
 			printCronExecUsage()
@@ -318,9 +333,10 @@ func runCronExec(args []string) {
 		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
 	}
+	token = loadLocalAPIToken(localAPIOptions{DataDir: dataDir, Token: token})
 
 	payload, _ := json.Marshal(map[string]any{"id": id})
-	resp, err := apiPost(sockPath, "/cron/exec", payload)
+	resp, err := apiPost(sockPath, "/cron/exec", payload, token)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -337,7 +353,7 @@ func runCronExec(args []string) {
 }
 
 func runCronDel(args []string) {
-	var dataDir string
+	var dataDir, token string
 	var id string
 
 	for i := 0; i < len(args); i++ {
@@ -346,6 +362,11 @@ func runCronDel(args []string) {
 			if i+1 < len(args) {
 				i++
 				dataDir = args[i]
+			}
+		case "--local-api-token":
+			if i+1 < len(args) {
+				i++
+				token = args[i]
 			}
 		default:
 			id = args[i]
@@ -362,9 +383,10 @@ func runCronDel(args []string) {
 		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
 	}
+	token = loadLocalAPIToken(localAPIOptions{DataDir: dataDir, Token: token})
 
 	payload, _ := json.Marshal(map[string]string{"id": id})
-	resp, err := apiPost(sockPath, "/cron/del", payload)
+	resp, err := apiPost(sockPath, "/cron/del", payload, token)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -381,7 +403,7 @@ func runCronDel(args []string) {
 }
 
 func runCronInfo(args []string) {
-	var dataDir, id, field string
+	var dataDir, id, field, token string
 
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
@@ -389,6 +411,11 @@ func runCronInfo(args []string) {
 			if i+1 < len(args) {
 				i++
 				dataDir = args[i]
+			}
+		case "--local-api-token":
+			if i+1 < len(args) {
+				i++
+				token = args[i]
 			}
 		default:
 			if id == "" {
@@ -411,16 +438,17 @@ func runCronInfo(args []string) {
 		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
 	}
+	token = loadLocalAPIToken(localAPIOptions{DataDir: dataDir, Token: token})
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", sockPath)
-			},
-		},
+	client := localAPIClient(sockPath, token)
+
+	req, err := http.NewRequest(http.MethodGet, "http://unix/cron/info?id="+id, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
-
-	resp, err := client.Get("http://unix/cron/info?id=" + id)
+	attachLocalAPIAuth(req, token)
+	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -473,7 +501,7 @@ func runCronInfo(args []string) {
 }
 
 func runCronEdit(args []string) {
-	var dataDir string
+	var dataDir, token string
 	var id, field string
 	var valueStr string
 
@@ -483,6 +511,11 @@ func runCronEdit(args []string) {
 			if i+1 < len(args) {
 				i++
 				dataDir = args[i]
+			}
+		case "--local-api-token":
+			if i+1 < len(args) {
+				i++
+				token = args[i]
 			}
 		case "--help", "-h":
 			printCronEditUsage()
@@ -525,9 +558,10 @@ func runCronEdit(args []string) {
 		fmt.Fprintf(os.Stderr, "Error: cc-connect is not running (socket not found: %s)\n", sockPath)
 		os.Exit(1)
 	}
+	token = loadLocalAPIToken(localAPIOptions{DataDir: dataDir, Token: token})
 
 	payload, _ := json.Marshal(map[string]any{"id": id, "field": field, "value": value})
-	resp, err := apiPost(sockPath, "/cron/edit", payload)
+	resp, err := apiPost(sockPath, "/cron/edit", payload, token)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
@@ -582,15 +616,15 @@ func parseCronEditValue(field, valueStr string) (any, error) {
 	}
 }
 
-func apiPost(sockPath, path string, payload []byte) (*http.Response, error) {
-	client := &http.Client{
-		Transport: &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", sockPath)
-			},
-		},
+func apiPost(sockPath, path string, payload []byte, token string) (*http.Response, error) {
+	client := localAPIClient(sockPath, token)
+	req, err := http.NewRequest(http.MethodPost, "http://unix"+path, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
 	}
-	return client.Post("http://unix"+path, "application/json", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	attachLocalAPIAuth(req, token)
+	return client.Do(req)
 }
 
 func printCronUsage() {
@@ -623,6 +657,7 @@ Options:
       --session-mode <mode>  reuse (default) or new-per-run — fresh agent session each run
       --timeout-mins <n>     Max minutes to wait per run (0 = no limit; default 30 if omitted)
       --data-dir <path>      Data directory (default: ~/.cc-connect)
+      --local-api-token <t>   Local API token if configured in [local_api]
   -h, --help                 Show this help
 
 Examples:
