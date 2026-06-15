@@ -71,11 +71,7 @@ func (p *decisionWiringPlatform) SendDecisionRequest(context.Context, core.Decis
 func (p *decisionWiringPlatform) SupportsDecisionRequests() bool { return p.supports }
 
 func TestWireDecisionPlatformsSetsResponderAndFirstNotifier(t *testing.T) {
-	api, err := core.NewAPIServer(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewAPIServer error = %v", err)
-	}
-	defer api.Stop()
+	api := &core.APIServer{}
 	first := &decisionWiringPlatform{supports: true}
 	second := &decisionWiringPlatform{supports: true}
 	wireDecisionPlatforms(api, []core.Platform{first, second})
@@ -88,11 +84,7 @@ func TestWireDecisionPlatformsSetsResponderAndFirstNotifier(t *testing.T) {
 }
 
 func TestWireDecisionPlatformsSkipsUnsupportedNotifier(t *testing.T) {
-	api, err := core.NewAPIServer(t.TempDir())
-	if err != nil {
-		t.Fatalf("NewAPIServer error = %v", err)
-	}
-	defer api.Stop()
+	api := &core.APIServer{}
 	unsupported := &decisionWiringPlatform{supports: false}
 	supported := &decisionWiringPlatform{supports: true}
 	wireDecisionPlatforms(api, []core.Platform{unsupported, supported})

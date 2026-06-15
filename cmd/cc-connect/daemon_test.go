@@ -33,9 +33,10 @@ func TestParseDaemonInstallArgs_ConfigEqualsFormSetsWorkDir(t *testing.T) {
 }
 
 func TestParseDaemonInstallArgs_WorkDirOverridesConfig(t *testing.T) {
+	override := filepath.Join(string(filepath.Separator), "tmp", "override")
 	cfg, force, err := parseDaemonInstallArgs([]string{
 		"--config", "/tmp/example/config.toml",
-		"--work-dir", "/tmp/override",
+		"--work-dir", override,
 		"--force",
 	})
 	if err != nil {
@@ -45,7 +46,7 @@ func TestParseDaemonInstallArgs_WorkDirOverridesConfig(t *testing.T) {
 		t.Fatalf("force = false, want true")
 	}
 
-	want := filepath.Clean("/tmp/override")
+	want := filepath.Clean(override)
 	if cfg.WorkDir != want {
 		t.Fatalf("cfg.WorkDir = %q, want %q", cfg.WorkDir, want)
 	}
