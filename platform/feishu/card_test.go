@@ -98,6 +98,67 @@ func TestBuildDecisionCardPayload(t *testing.T) {
 	}
 }
 
+func TestBuildDecisionCardSplitsManyActionsIntoRows(t *testing.T) {
+	dec := core.Decision{
+		ID:          "dec_123",
+		Title:       "六选项验证",
+		Message:     "验证去重。",
+		Choices:     []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+		Recommended: "continue",
+	}
+	rendered := renderCardMap(buildDecisionCard(dec), "")
+	elements := anySlice(rendered["elements"])
+	if elements == nil {
+		t.Fatalf("elements = %#v, want array", rendered["elements"])
+	}
+	var form map[string]any
+	for _, elem := range elements {
+		m, ok := elem.(map[string]any)
+		if ok && m["tag"] == "form" {
+			form = m
+			break
+		}
+	}
+	if form == nil {
+		t.Fatalf("decision form not found in %#v", elements)
+	}
+	formElements := anySlice(form["elements"])
+	if formElements == nil {
+		t.Fatalf("form elements = %#v, want array", form["elements"])
+	}
+	var columnSets []map[string]any
+	for _, elem := range formElements {
+		m, ok := elem.(map[string]any)
+		if ok && m["tag"] == "column_set" {
+			columnSets = append(columnSets, m)
+		}
+	}
+	if len(columnSets) != 2 {
+		t.Fatalf("column sets = %d, want 2", len(columnSets))
+	}
+	for i, set := range columnSets {
+		columns := anySlice(set["columns"])
+		if len(columns) != 3 {
+			t.Fatalf("row %d columns = %#v, want 3 columns", i, set["columns"])
+		}
+	}
+}
+
+func anySlice(v any) []any {
+	switch x := v.(type) {
+	case []any:
+		return x
+	case []map[string]any:
+		out := make([]any, 0, len(x))
+		for _, item := range x {
+			out = append(out, item)
+		}
+		return out
+	default:
+		return nil
+	}
+}
+
 func TestRenderCardMap_TwoEqualColumnsUseBisectAndCenteredButtons(t *testing.T) {
 	buttons := []core.CardButton{
 		core.PrimaryBtn("Session Management", "nav:/help session"),

@@ -286,6 +286,21 @@ func isDecisionActionRow(actions core.CardActions) bool {
 	return true
 }
 
+func chunkActions(actions []map[string]any, size int) [][]map[string]any {
+	if size <= 0 || len(actions) == 0 {
+		return nil
+	}
+	rows := make([][]map[string]any, 0, (len(actions)+size-1)/size)
+	for start := 0; start < len(actions); start += size {
+		end := start + size
+		if end > len(actions) {
+			end = len(actions)
+		}
+		rows = append(rows, actions[start:end])
+	}
+	return rows
+}
+
 func renderDecisionForm(input core.CardInput, actions core.CardActions, sessionKey string) map[string]any {
 	formElements := []map[string]any{
 		{
@@ -294,6 +309,7 @@ func renderDecisionForm(input core.CardInput, actions core.CardActions, sessionK
 			"placeholder": plainText(input.Placeholder),
 		},
 	}
+	var buttonRows [][]map[string]any
 	var columns []map[string]any
 	for _, btn := range actions.Buttons {
 		btnType := btn.Type
@@ -331,14 +347,17 @@ func renderDecisionForm(input core.CardInput, actions core.CardActions, sessionK
 			"elements":         []map[string]any{button},
 		})
 	}
-	columnSet := map[string]any{
-		"tag":     "column_set",
-		"columns": columns,
+	buttonRows = chunkActions(columns, 3)
+	for _, row := range buttonRows {
+		columnSet := map[string]any{
+			"tag":     "column_set",
+			"columns": row,
+		}
+		if len(row) == 2 {
+			columnSet["flex_mode"] = "bisect"
+		}
+		formElements = append(formElements, columnSet)
 	}
-	if len(columns) == 2 {
-		columnSet["flex_mode"] = "bisect"
-	}
-	formElements = append(formElements, columnSet)
 	return map[string]any{
 		"tag":      "form",
 		"name":     "decision_form",
