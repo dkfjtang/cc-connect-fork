@@ -62,12 +62,19 @@ func NewAPIServer(dataDir string) (*APIServer, error) {
 		return nil, fmt.Errorf("chmod socket: %w", err)
 	}
 
+	decisions, err := NewPersistentDecisionStore(dataDir)
+	if err != nil {
+		_ = listener.Close()
+		_ = os.Remove(sockPath)
+		return nil, fmt.Errorf("load decision store: %w", err)
+	}
+
 	s := &APIServer{
 		socketPath: sockPath,
 		listener:   listener,
 		mux:        http.NewServeMux(),
 		engines:    make(map[string]*Engine),
-		decisions:  NewDecisionStore(),
+		decisions:  decisions,
 	}
 	s.mux.HandleFunc("/send", s.handleSend)
 	s.mux.HandleFunc("/sessions", s.handleSessions)
@@ -246,18 +253,33 @@ func (s *APIServer) handleDecisionAsk(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	dec, err := s.decisions.Create(req)
+	dec, created, err := s.decisions.CreateOrReuse(req)
 	if err != nil {
+		if errors.Is(err, ErrDecisionPendingNotification) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if s.notifier == nil {
-		http.Error(w, "decision notifier not available", http.StatusFailedDependency)
-		return
-	}
-	if err := s.notifier.SendDecisionRequest(r.Context(), dec); err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
-		return
+	if created {
+		if s.notifier == nil {
+			if abortErr := s.decisions.AbortUnresolved(dec.ID); abortErr != nil && !errors.Is(abortErr, ErrDecisionNotFound) {
+				slog.Warn("api server: abort unsent decision failed", "decision_id", dec.ID, "error", abortErr)
+			}
+			http.Error(w, "decision notifier not available", http.StatusFailedDependency)
+			return
+		}
+		if err := s.notifier.SendDecisionRequest(r.Context(), dec); err != nil {
+			if abortErr := s.decisions.AbortUnresolved(dec.ID); abortErr != nil && !errors.Is(abortErr, ErrDecisionNotFound) {
+				slog.Warn("api server: cleanup unsent decision failed", "decision_id", dec.ID, "error", abortErr)
+			}
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		if err := s.decisions.MarkNotified(dec.ID); err != nil {
+			slog.Warn("api server: decision notification sent but persisted mark-notified failed", "decision_id", dec.ID, "error", err)
+		}
 	}
 	apiJSON(w, http.StatusOK, dec)
 }
@@ -289,6 +311,10 @@ func (s *APIServer) handleDecisionRespond(w http.ResponseWriter, r *http.Request
 		case errors.Is(err, ErrDecisionNotFound):
 			http.Error(w, err.Error(), http.StatusNotFound)
 		case errors.Is(err, ErrDecisionResolved):
+			http.Error(w, err.Error(), http.StatusConflict)
+		case errors.Is(err, ErrDecisionTimeout):
+			http.Error(w, err.Error(), http.StatusGone)
+		case errors.Is(err, ErrDecisionPendingNotification):
 			http.Error(w, err.Error(), http.StatusConflict)
 		case errors.Is(err, ErrDecisionInvalidChoice):
 			http.Error(w, err.Error(), http.StatusBadRequest)

@@ -2,6 +2,7 @@ package feishu
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -33,7 +34,7 @@ func buildDecisionCard(dec core.Decision) *core.Card {
 			typ = "primary"
 		}
 		buttons = append(buttons, core.CardButton{
-			Text:  choice,
+			Text:  decisionChoiceLabel(choice),
 			Type:  typ,
 			Value: "decision:respond",
 			Extra: map[string]string{
@@ -43,8 +44,29 @@ func buildDecisionCard(dec core.Decision) *core.Card {
 		})
 	}
 	cb.ButtonsEqual(buttons...)
-	cb.TaggedNote("decision-card", "Optional comment")
+	cb.TaggedNote("decision-card", "可选备注")
 	return cb.Build()
+}
+
+func decisionChoiceLabel(choice string) string {
+	switch strings.ToLower(strings.TrimSpace(choice)) {
+	case "continue":
+		return "继续"
+	case "pause":
+		return "暂停"
+	case "revise":
+		return "修改"
+	case "ignore":
+		return "忽略"
+	case "remind_later":
+		return "稍后提醒"
+	case "reconnect":
+		return "重连"
+	case "stop", "abort":
+		return "停止"
+	default:
+		return choice
+	}
 }
 
 // ReplyCard sends a structured card as a reply to the original message.
@@ -491,7 +513,7 @@ func renderDecisionCard(card *core.Card, base map[string]any) (map[string]any, b
 	formElements = append(formElements, map[string]any{
 		"tag":         "input",
 		"name":        "decision_comment",
-		"placeholder": plainText("Optional comment"),
+		"placeholder": plainText(decisionCommentPlaceholder(card)),
 	})
 
 	buttonColumns := make([]map[string]any, 0, len(buttons))
@@ -514,7 +536,7 @@ func renderDecisionCard(card *core.Card, base map[string]any) (map[string]any, b
 					"tag":              "button",
 					"text":             plainText(btn.Text),
 					"type":             btnType,
-					"name":             fmt.Sprintf("decision_submit_%d", i),
+					"name":             decisionSubmitName(btn, i),
 					"form_action_type": "submit",
 					"value":            valMap,
 				},
@@ -541,6 +563,28 @@ func renderDecisionCard(card *core.Card, base map[string]any) (map[string]any, b
 		},
 	}
 	return base, true
+}
+
+func decisionSubmitName(btn core.CardButton, index int) string {
+	decisionID := strings.TrimSpace(btn.Extra["decision_id"])
+	choice := strings.TrimSpace(btn.Extra["decision_choice"])
+	if decisionID == "" || choice == "" {
+		return fmt.Sprintf("decision_submit_%d", index)
+	}
+	return "decision_submit_v1_" + hex.EncodeToString([]byte(decisionID)) + "_" + hex.EncodeToString([]byte(choice))
+}
+
+func decisionCommentPlaceholder(card *core.Card) string {
+	if card == nil {
+		return "可选备注"
+	}
+	for _, elem := range card.Elements {
+		note, ok := elem.(core.CardNote)
+		if ok && note.Tag == "decision-card" && strings.TrimSpace(note.Text) != "" {
+			return note.Text
+		}
+	}
+	return "可选备注"
 }
 
 func chunkColumns(columns []map[string]any, size int) [][]map[string]any {

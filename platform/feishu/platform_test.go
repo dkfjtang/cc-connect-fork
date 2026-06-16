@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,6 +39,44 @@ func TestNew_CanDisableInteractiveCards(t *testing.T) {
 	}
 	if _, ok := p.(core.CardSender); ok {
 		t.Fatal("expected disabled Feishu platform to fall back to plain text")
+	}
+}
+
+func TestNew_NotifyWildcardFallsBackToSingleAllowFrom(t *testing.T) {
+	pAny, err := New(map[string]any{
+		"app_id":         "cli_xxx",
+		"app_secret":     "secret",
+		"notify_user_id": "*",
+		"allow_from":     "ou_owner",
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	p, ok := pAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", pAny)
+	}
+	if got := p.notifyUserID; got != "ou_owner" {
+		t.Fatalf("notifyUserID = %q, want fallback allow_from user", got)
+	}
+}
+
+func TestNew_DefaultUserWildcardDoesNotBecomeNotifyUser(t *testing.T) {
+	pAny, err := New(map[string]any{
+		"app_id":          "cli_xxx",
+		"app_secret":      "secret",
+		"default_user_id": "*",
+		"allow_from":      "*",
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	p, ok := pAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", pAny)
+	}
+	if got := p.notifyUserID; got != "" {
+		t.Fatalf("notifyUserID = %q, want empty when only wildcard values are configured", got)
 	}
 }
 
@@ -1308,6 +1347,35 @@ func TestBuildDecisionCardPayload(t *testing.T) {
 	}
 }
 
+func TestInteractivePlatformDecisionSendSlotsAreSerialized(t *testing.T) {
+	ip := &interactivePlatform{Platform: &Platform{}}
+	now := time.Now()
+
+	const requests = 3
+	slots := make(chan time.Time, requests)
+	var wg sync.WaitGroup
+	for i := 0; i < requests; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			slots <- ip.reserveDecisionSendSlot(now)
+		}()
+	}
+	wg.Wait()
+	close(slots)
+
+	got := make([]time.Time, 0, requests)
+	for slot := range slots {
+		got = append(got, slot)
+	}
+	sort.Slice(got, func(i, j int) bool { return got[i].Before(got[j]) })
+	for i := 1; i < len(got); i++ {
+		if gap := got[i].Sub(got[i-1]); gap < 350*time.Millisecond {
+			t.Fatalf("slot gap %d = %s, want at least 350ms; slots=%v", i, gap, got)
+		}
+	}
+}
+
 func TestInteractivePlatform_DecisionActionResolvesWithComment(t *testing.T) {
 	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
 	if err != nil {
@@ -1352,6 +1420,292 @@ func TestInteractivePlatform_DecisionActionResolvesWithComment(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("expected decision resolver invocation")
+	}
+}
+
+func TestInteractivePlatform_DecisionActionReadsPayloadFromFormValue(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+
+	respCh := make(chan core.DecisionResponse, 1)
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+		respCh <- resp
+		return nil
+	})
+
+	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				Value: map[string]any{
+					"action": "decision:respond",
+				},
+				FormValue: map[string]any{
+					"decision_id":      "dec_123",
+					"decision_choice":  "continue",
+					"decision_comment": "继续观察一轮。",
+				},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if cardResp == nil || cardResp.Card == nil {
+		t.Fatalf("expected card update response, got %#v", cardResp)
+	}
+
+	select {
+	case got := <-respCh:
+		if got.DecisionID != "dec_123" || got.Choice != "continue" || got.Comment != "继续观察一轮。" {
+			t.Fatalf("decision response = %#v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected decision resolver invocation")
+	}
+}
+
+func TestInteractivePlatform_DecisionActionReadsPayloadFromSubmitName(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+
+	respCh := make(chan core.DecisionResponse, 1)
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+		respCh <- resp
+		return nil
+	})
+
+	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				Name:      "decision_submit_v1_6465635f313233_72656d696e645f6c61746572",
+				FormValue: map[string]any{"decision_comment": "晚点再看。"},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if cardResp == nil || cardResp.Card == nil {
+		t.Fatalf("expected card update response, got %#v", cardResp)
+	}
+
+	select {
+	case got := <-respCh:
+		if got.DecisionID != "dec_123" || got.Choice != "remind_later" || got.Comment != "晚点再看。" {
+			t.Fatalf("decision response = %#v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected decision resolver invocation")
+	}
+}
+
+func TestInteractivePlatform_DecisionActionReadsCustomChoiceFromSubmitName(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+
+	respCh := make(chan core.DecisionResponse, 1)
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+		respCh <- resp
+		return nil
+	})
+
+	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				Name:      "decision_submit_v1_6465632d776974682d64617368_617070726f76652d6e6f77",
+				FormValue: map[string]any{"decision_comment": "同意。"},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if cardResp == nil || cardResp.Card == nil {
+		t.Fatalf("expected card update response, got %#v", cardResp)
+	}
+
+	select {
+	case got := <-respCh:
+		if got.DecisionID != "dec-with-dash" || got.Choice != "approve-now" || got.Comment != "同意。" {
+			t.Fatalf("decision response = %#v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected decision resolver invocation")
+	}
+}
+
+func TestInteractivePlatform_LegacyDecisionSubmitNameWithoutPayloadDoesNotResolve(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+
+	called := false
+	ip.SetDecisionResponder(func(_ context.Context, _ core.DecisionResponse) error {
+		called = true
+		return nil
+	})
+
+	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				Name:      "decision_submit_0",
+				FormValue: map[string]any{"decision_comment": "旧卡片只有备注。"},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if called {
+		t.Fatal("legacy submit name without payload should not call decision responder")
+	}
+	if cardResp != nil {
+		t.Fatalf("legacy submit name without payload should not return a decision response, got %#v", cardResp)
+	}
+}
+
+func TestInteractivePlatform_DecisionActionReportsExpiredDecision(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+
+	ip.SetDecisionResponder(func(_ context.Context, _ core.DecisionResponse) error {
+		return core.ErrDecisionTimeout
+	})
+
+	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				Value: map[string]any{
+					"action":          "decision:respond",
+					"decision_id":     "dec_expired",
+					"decision_choice": "continue",
+				},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if cardResp == nil || cardResp.Toast == nil {
+		t.Fatalf("expected toast response, got %#v", cardResp)
+	}
+	if cardResp.Toast.Type != "warning" || cardResp.Toast.Content != "决策已过期" {
+		t.Fatalf("toast = %#v", cardResp.Toast)
+	}
+}
+
+func TestInteractivePlatform_DecisionActionReportsResolvedDecision(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+
+	ip.SetDecisionResponder(func(_ context.Context, _ core.DecisionResponse) error {
+		return core.ErrDecisionResolved
+	})
+
+	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				Value: map[string]any{
+					"action":          "decision:respond",
+					"decision_id":     "dec_resolved",
+					"decision_choice": "continue",
+				},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if cardResp == nil || cardResp.Toast == nil {
+		t.Fatalf("expected toast response, got %#v", cardResp)
+	}
+	if cardResp.Toast.Type != "info" || cardResp.Toast.Content != "决策已处理" {
+		t.Fatalf("toast = %#v", cardResp.Toast)
+	}
+}
+
+func TestInteractivePlatform_DecisionActionReportsNotFoundDecision(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+
+	ip.SetDecisionResponder(func(_ context.Context, _ core.DecisionResponse) error {
+		return core.ErrDecisionNotFound
+	})
+
+	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				Value: map[string]any{
+					"action":          "decision:respond",
+					"decision_id":     "dec_missing",
+					"decision_choice": "continue",
+				},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if cardResp == nil || cardResp.Toast == nil {
+		t.Fatalf("expected toast response, got %#v", cardResp)
+	}
+	if cardResp.Toast.Type != "warning" || cardResp.Toast.Content != "未找到决策" {
+		t.Fatalf("toast = %#v", cardResp.Toast)
 	}
 }
 

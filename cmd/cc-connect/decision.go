@@ -153,6 +153,16 @@ func parseDecisionAskArgs(args []string) (core.DecisionAskRequest, decisionAskOp
 	if req.Message == "" && len(positional) > 0 {
 		req.Message = strings.Join(positional, " ")
 	}
+	scopeParts := []string{}
+	if v := strings.TrimSpace(os.Getenv("CC_PROJECT")); v != "" {
+		scopeParts = append(scopeParts, "project="+v)
+	}
+	if v := strings.TrimSpace(os.Getenv("CC_SESSION_KEY")); v != "" {
+		scopeParts = append(scopeParts, "session="+v)
+	}
+	if len(scopeParts) > 0 {
+		req.Scope = strings.Join(scopeParts, ";")
+	}
 	if strings.TrimSpace(req.Title) == "" {
 		return req, opts, fmt.Errorf("--title is required")
 	}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,11 +13,20 @@ import (
 )
 
 type stubDecisionNotifier struct {
-	sent []Decision
-	err  error
+	sent    []Decision
+	err     error
+	block   chan struct{}
+	started chan struct{}
 }
 
 func (s *stubDecisionNotifier) SendDecisionRequest(_ context.Context, dec Decision) error {
+	if s.started != nil {
+		close(s.started)
+		s.started = nil
+	}
+	if s.block != nil {
+		<-s.block
+	}
 	if s.err != nil {
 		return s.err
 	}
@@ -117,6 +127,194 @@ func TestDecisionAPIAskRespondGet(t *testing.T) {
 	}
 	if record.Response == nil || record.Response.Choice != "continue" || record.Response.Comment != "Use proxy if slow." {
 		t.Fatalf("record response = %#v", record.Response)
+	}
+}
+
+func TestDecisionAPIReusedPendingDecisionDoesNotNotifyAgain(t *testing.T) {
+	notifier := &stubDecisionNotifier{}
+	api := &APIServer{
+		decisions: NewDecisionStore(),
+		notifier:  notifier,
+	}
+	body, err := json.Marshal(DecisionAskRequest{
+		Title:       "Need confirmation",
+		Message:     "Proceed?",
+		Choices:     []string{"continue", "abort"},
+		Recommended: "continue",
+		TimeoutMins: 30,
+	})
+	if err != nil {
+		t.Fatalf("marshal ask: %v", err)
+	}
+
+	var first Decision
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest(http.MethodPost, "/decision/ask", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		api.handleDecisionAsk(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("ask %d status = %d, body=%s", i+1, rec.Code, rec.Body.String())
+		}
+		var dec Decision
+		if err := json.Unmarshal(rec.Body.Bytes(), &dec); err != nil {
+			t.Fatalf("decode decision %d: %v", i+1, err)
+		}
+		if i == 0 {
+			first = dec
+			continue
+		}
+		if dec.ID != first.ID {
+			t.Fatalf("second decision ID = %q, want reused %q", dec.ID, first.ID)
+		}
+	}
+	if len(notifier.sent) != 1 {
+		t.Fatalf("notifier sent %d decisions, want 1", len(notifier.sent))
+	}
+}
+
+func TestDecisionAPINotifierFailureDoesNotReservePendingDecision(t *testing.T) {
+	notifier := &stubDecisionNotifier{err: errors.New("send failed")}
+	api := &APIServer{
+		decisions: NewDecisionStore(),
+		notifier:  notifier,
+	}
+	body, err := json.Marshal(DecisionAskRequest{
+		Title:       "Need confirmation",
+		Message:     "Proceed?",
+		Choices:     []string{"continue", "abort"},
+		Recommended: "continue",
+		TimeoutMins: 30,
+	})
+	if err != nil {
+		t.Fatalf("marshal ask: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/decision/ask", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	api.handleDecisionAsk(rec, req)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("first ask status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	notifier.err = nil
+	req = httptest.NewRequest(http.MethodPost, "/decision/ask", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	api.handleDecisionAsk(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("second ask status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(notifier.sent) != 1 {
+		t.Fatalf("notifier sent %d decisions after retry, want 1", len(notifier.sent))
+	}
+}
+
+func TestDecisionAPIConcurrentAskDuringNotificationDoesNotReturnRolledBackDecision(t *testing.T) {
+	block := make(chan struct{})
+	started := make(chan struct{})
+	notifier := &stubDecisionNotifier{err: errors.New("send failed"), block: block, started: started}
+	api := &APIServer{
+		decisions: NewDecisionStore(),
+		notifier:  notifier,
+	}
+	body, err := json.Marshal(DecisionAskRequest{
+		Title:       "Need confirmation",
+		Message:     "Proceed?",
+		Choices:     []string{"continue", "abort"},
+		Recommended: "continue",
+		TimeoutMins: 30,
+	})
+	if err != nil {
+		t.Fatalf("marshal ask: %v", err)
+	}
+
+	firstDone := make(chan int, 1)
+	go func() {
+		req := httptest.NewRequest(http.MethodPost, "/decision/ask", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		api.handleDecisionAsk(rec, req)
+		firstDone <- rec.Code
+	}()
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for notifier to start")
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/decision/ask", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	api.handleDecisionAsk(rec, req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("concurrent ask status = %d, want 409; body=%s", rec.Code, rec.Body.String())
+	}
+
+	close(block)
+	if code := <-firstDone; code != http.StatusBadGateway {
+		t.Fatalf("first ask status = %d, want 502", code)
+	}
+}
+
+func TestDecisionAPIMissingNotifierDoesNotReservePendingDecision(t *testing.T) {
+	notifier := &stubDecisionNotifier{}
+	api := &APIServer{
+		decisions: NewDecisionStore(),
+	}
+	body, err := json.Marshal(DecisionAskRequest{
+		Title:       "Need confirmation",
+		Message:     "Proceed?",
+		Choices:     []string{"continue", "abort"},
+		Recommended: "continue",
+		TimeoutMins: 30,
+	})
+	if err != nil {
+		t.Fatalf("marshal ask: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/decision/ask", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	api.handleDecisionAsk(rec, req)
+	if rec.Code != http.StatusFailedDependency {
+		t.Fatalf("first ask status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	api.notifier = notifier
+	req = httptest.NewRequest(http.MethodPost, "/decision/ask", bytes.NewReader(body))
+	rec = httptest.NewRecorder()
+	api.handleDecisionAsk(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("second ask status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+	if len(notifier.sent) != 1 {
+		t.Fatalf("notifier sent %d decisions after retry, want 1", len(notifier.sent))
+	}
+}
+
+func TestDecisionAPIRespondTimeoutReturnsGone(t *testing.T) {
+	store := NewDecisionStore()
+	dec, err := store.Create(DecisionAskRequest{
+		Title:   "Need confirmation",
+		Message: "Proceed?",
+		Choices: []string{"continue", "abort"},
+		Timeout: time.Nanosecond,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := store.MarkNotified(dec.ID); err != nil {
+		t.Fatalf("MarkNotified: %v", err)
+	}
+	api := &APIServer{decisions: store}
+	time.Sleep(time.Millisecond)
+
+	respBody, err := json.Marshal(DecisionResponse{DecisionID: dec.ID, Choice: "continue"})
+	if err != nil {
+		t.Fatalf("marshal response: %v", err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/decision/respond", bytes.NewReader(respBody))
+	rec := httptest.NewRecorder()
+	api.handleDecisionRespond(rec, req)
+	if rec.Code != http.StatusGone {
+		t.Fatalf("respond status = %d, want 410; body=%s", rec.Code, rec.Body.String())
 	}
 }
 

@@ -3,6 +3,7 @@ package feishu
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -132,24 +133,26 @@ type Platform struct {
 	shareSessionInChannel      bool
 	threadIsolation            bool
 	// noReplyToTrigger: when true, send via Create instead of Im.Message.Reply (no quote to the user's message).
-	noReplyToTrigger  bool
-	resolveMentions   bool
-	client            *lark.Client
-	replayClient      *lark.Client
-	replayClientMu    sync.Mutex
-	wsClient          *larkws.Client
-	handler           core.MessageHandler
-	cardNavHandler    core.CardNavigationHandler
-	decisionResponder func(context.Context, core.DecisionResponse) error
-	cancel            context.CancelFunc
-	dedup             *core.MessageDedup
-	botOpenID         string
-	peerBots          map[string]string // app_id -> friendly alias, for quoted-reply attribution
-	userNameCache     sync.Map          // open_id -> display name
-	chatNameCache     sync.Map          // chat_id -> chat name
-	chatMemberCache   sync.Map          // chatID -> *chatMemberEntry
-	recalledMu        sync.Mutex
-	recalledMsgIDs    map[string]time.Time // message_id -> recall time, short TTL race guard
+	noReplyToTrigger   bool
+	resolveMentions    bool
+	client             *lark.Client
+	replayClient       *lark.Client
+	replayClientMu     sync.Mutex
+	wsClient           *larkws.Client
+	handler            core.MessageHandler
+	cardNavHandler     core.CardNavigationHandler
+	decisionResponder  func(context.Context, core.DecisionResponse) error
+	cancel             context.CancelFunc
+	dedup              *core.MessageDedup
+	botOpenID          string
+	peerBots           map[string]string // app_id -> friendly alias, for quoted-reply attribution
+	userNameCache      sync.Map          // open_id -> display name
+	chatNameCache      sync.Map          // chat_id -> chat name
+	chatMemberCache    sync.Map          // chatID -> *chatMemberEntry
+	recalledMu         sync.Mutex
+	recalledMsgIDs     map[string]time.Time // message_id -> recall time, short TTL race guard
+	decisionSendMu     sync.Mutex
+	nextDecisionSendAt time.Time
 	// Webhook mode fields (for Lark international version)
 	server       *http.Server
 	port         string
@@ -228,10 +231,12 @@ func newPlatform(name, domain string, opts map[string]any) (core.Platform, error
 	allowFrom, _ := opts["allow_from"].(string)
 	core.CheckAllowFrom(name, allowFrom)
 	notifyUserID, _ := opts["notify_user_id"].(string)
-	if strings.TrimSpace(notifyUserID) == "" {
-		notifyUserID, _ = opts["default_user_id"].(string)
+	notifyUserID = normalizeFeishuNotifyUserID(notifyUserID)
+	if notifyUserID == "" {
+		defaultUserID, _ := opts["default_user_id"].(string)
+		notifyUserID = normalizeFeishuNotifyUserID(defaultUserID)
 	}
-	if strings.TrimSpace(notifyUserID) == "" {
+	if notifyUserID == "" {
 		notifyUserID = singleFeishuAllowFromUser(allowFrom)
 	}
 	allowChat, _ := opts["allow_chat"].(string)
@@ -580,6 +585,12 @@ func (p *Platform) onCardAction(ctx context.Context, event *callback.CardActionT
 	if actionVal == "" && event.Event.Action.Option != "" {
 		actionVal = event.Event.Action.Option
 	}
+	if actionVal == "" && isDecisionActionCallback(event.Event.Action) {
+		actionVal = "decision:respond"
+	}
+	if actionVal == "" && strings.HasPrefix(event.Event.Action.Name, "decision_submit_v1_") {
+		actionVal = "decision:respond"
+	}
 	if actionVal == "" {
 		switch event.Event.Action.Name {
 		case "delete_mode_submit":
@@ -613,34 +624,52 @@ func (p *Platform) onCardAction(ctx context.Context, event *callback.CardActionT
 	if actionVal == "decision:respond" {
 		if p.decisionResponder == nil {
 			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "error", Content: "decision resolver is unavailable"},
+				Toast: &callback.Toast{Type: "error", Content: "决策处理器不可用"},
 			}, nil
 		}
-		decisionID, _ := event.Event.Action.Value["decision_id"].(string)
-		decisionChoice, _ := event.Event.Action.Value["decision_choice"].(string)
+		decisionID := decisionCallbackString(event.Event.Action, "decision_id")
+		decisionChoice := decisionCallbackString(event.Event.Action, "decision_choice")
+		if strings.TrimSpace(decisionID) == "" || strings.TrimSpace(decisionChoice) == "" {
+			decisionID, decisionChoice = decisionPayloadFromSubmitName(event.Event.Action.Name)
+		}
 		if strings.TrimSpace(decisionID) == "" || strings.TrimSpace(decisionChoice) == "" {
 			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "error", Content: "missing decision payload"},
+				Toast: &callback.Toast{Type: "error", Content: "缺少决策回调数据"},
 			}, nil
 		}
-		comment, _ := event.Event.Action.Value["comment"].(string)
-		if comment == "" && event.Event.Action.FormValue != nil {
-			if v, ok := event.Event.Action.FormValue["decision_comment"].(string); ok {
-				comment = v
-			}
+		comment := decisionCallbackString(event.Event.Action, "comment")
+		if comment == "" {
+			comment = decisionCallbackString(event.Event.Action, "decision_comment")
 		}
 		if err := p.decisionResponder(ctx, core.DecisionResponse{
 			DecisionID: decisionID,
 			Choice:     decisionChoice,
 			Comment:    comment,
 		}); err != nil {
+			switch {
+			case errors.Is(err, core.ErrDecisionTimeout):
+				slog.Warn(p.tag()+": decision expired", "decision_id", decisionID)
+				return &callback.CardActionTriggerResponse{
+					Toast: &callback.Toast{Type: "warning", Content: "决策已过期"},
+				}, nil
+			case errors.Is(err, core.ErrDecisionResolved):
+				slog.Info(p.tag()+": decision already resolved", "decision_id", decisionID)
+				return &callback.CardActionTriggerResponse{
+					Toast: &callback.Toast{Type: "info", Content: "决策已处理"},
+				}, nil
+			case errors.Is(err, core.ErrDecisionNotFound):
+				slog.Warn(p.tag()+": decision not found", "decision_id", decisionID)
+				return &callback.CardActionTriggerResponse{
+					Toast: &callback.Toast{Type: "warning", Content: "未找到决策"},
+				}, nil
+			}
 			slog.Warn(p.tag()+": decision resolve failed", "error", err, "decision_id", decisionID)
 			return &callback.CardActionTriggerResponse{
-				Toast: &callback.Toast{Type: "error", Content: "decision resolve failed"},
+				Toast: &callback.Toast{Type: "error", Content: "决策处理失败"},
 			}, nil
 		}
-		cb := core.NewCard().Title("Decision received", "green")
-		cb.Markdown("The decision has been recorded.")
+		cb := core.NewCard().Title("决策已收到", "green")
+		cb.Markdown("已记录本次选择。")
 		return &callback.CardActionTriggerResponse{
 			Card: &callback.Card{
 				Type: "raw",
@@ -809,6 +838,55 @@ func (p *Platform) onCardAction(ctx context.Context, event *callback.CardActionT
 	}
 
 	return nil, nil
+}
+
+func isDecisionActionCallback(action *callback.CallBackAction) bool {
+	if action == nil {
+		return false
+	}
+	return decisionCallbackString(action, "decision_id") != "" &&
+		decisionCallbackString(action, "decision_choice") != ""
+}
+
+func decisionCallbackString(action *callback.CallBackAction, key string) string {
+	if action == nil {
+		return ""
+	}
+	if v, ok := action.Value[key].(string); ok && strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	if action.FormValue != nil {
+		if v, ok := action.FormValue[key].(string); ok && strings.TrimSpace(v) != "" {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+func decisionPayloadFromSubmitName(name string) (decisionID string, decisionChoice string) {
+	const prefix = "decision_submit_v1_"
+	payload := strings.TrimSpace(strings.TrimPrefix(name, prefix))
+	if payload == "" || payload == name {
+		return "", ""
+	}
+	parts := strings.Split(payload, "_")
+	if len(parts) != 2 {
+		return "", ""
+	}
+	idBytes, err := hex.DecodeString(parts[0])
+	if err != nil {
+		return "", ""
+	}
+	choiceBytes, err := hex.DecodeString(parts[1])
+	if err != nil {
+		return "", ""
+	}
+	decisionID = strings.TrimSpace(string(idBytes))
+	decisionChoice = strings.TrimSpace(string(choiceBytes))
+	if decisionID == "" || decisionChoice == "" {
+		return "", ""
+	}
+	return decisionID, decisionChoice
 }
 
 func (p *Platform) addReaction(messageID string) string {
@@ -1103,7 +1181,7 @@ func (p *Platform) onMessage(ctx context.Context, event *larkim.P2MessageReceive
 		chatType = *msg.ChatType
 	}
 	mentionCount := len(msg.Mentions)
-	slog.Debug(p.tag()+": inbound message",
+	slog.Info(p.tag()+": inbound message",
 		"message_id", messageID,
 		"chat_id", chatID,
 		"chat_type", chatType,
@@ -1134,7 +1212,7 @@ func (p *Platform) onMessage(ctx context.Context, event *larkim.P2MessageReceive
 				slog.Debug(p.tag()+": passing attachment through active thread without mention",
 					"chat_id", chatID, "session_key", sessionKey, "msg_type", msgType, "message_id", messageID)
 			default:
-				slog.Debug(p.tag()+": ignoring group message without bot mention", "chat_id", chatID)
+				slog.Info(p.tag()+": ignoring group message without bot mention", "chat_id", chatID, "message_id", messageID, "mentions", mentionCount)
 				return nil
 			}
 		}
@@ -1169,7 +1247,7 @@ func (p *Platform) onMessage(ctx context.Context, event *larkim.P2MessageReceive
 	parentID := stringValue(msg.ParentId)
 
 	rctx := replyContext{messageID: messageID, chatID: chatID, sessionKey: sessionKey}
-	slog.Debug(p.tag()+": routed inbound message",
+	slog.Info(p.tag()+": routed inbound message",
 		"message_id", messageID,
 		"session_key", sessionKey,
 		"reply_in_thread", p.shouldReplyInThread(rctx),
@@ -3227,8 +3305,30 @@ func (p *interactivePlatform) SendDecisionRequest(ctx context.Context, dec core.
 	if userID == "" {
 		return fmt.Errorf("%s: notify_user_id is not configured", p.tag())
 	}
+	sendAt := p.reserveDecisionSendSlot(time.Now())
+	if wait := time.Until(sendAt); wait > 0 {
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
 	cardJSON := renderCard(buildDecisionCard(dec), "")
 	return p.createUserMessage(ctx, userID, larkim.MsgTypeInteractive, cardJSON, "send decision request")
+}
+
+func (p *interactivePlatform) reserveDecisionSendSlot(now time.Time) time.Time {
+	const minDecisionSendGap = 350 * time.Millisecond
+	p.decisionSendMu.Lock()
+	defer p.decisionSendMu.Unlock()
+	if p.nextDecisionSendAt.Before(now) {
+		p.nextDecisionSendAt = now
+	}
+	sendAt := p.nextDecisionSendAt
+	p.nextDecisionSendAt = sendAt.Add(minDecisionSendGap)
+	return sendAt
 }
 
 func singleFeishuAllowFromUser(allowFrom string) string {
@@ -3244,6 +3344,14 @@ func singleFeishuAllowFromUser(allowFrom string) string {
 		return users[0]
 	}
 	return ""
+}
+
+func normalizeFeishuNotifyUserID(userID string) string {
+	userID = strings.TrimSpace(userID)
+	if userID == "*" {
+		return ""
+	}
+	return userID
 }
 
 func (p *Platform) withFreshTenantAccessTokenRetry(ctx context.Context, operation string, fn feishuRequestFunc) error {

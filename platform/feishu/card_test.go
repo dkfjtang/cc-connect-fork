@@ -18,6 +18,51 @@ func decodeRenderedCard(t *testing.T, card *core.Card) map[string]any {
 	return got
 }
 
+func decisionCardButtons(t *testing.T, got map[string]any) []map[string]any {
+	t.Helper()
+
+	elements, ok := got["elements"].([]any)
+	if !ok || len(elements) != 1 {
+		t.Fatalf("elements = %#v, want one decision form", got["elements"])
+	}
+	form, ok := elements[0].(map[string]any)
+	if !ok || form["tag"] != "form" {
+		t.Fatalf("first element = %#v, want form", elements[0])
+	}
+	formElements, ok := form["elements"].([]any)
+	if !ok {
+		t.Fatalf("form elements = %#v, want array", form["elements"])
+	}
+
+	var buttons []map[string]any
+	for _, elem := range formElements {
+		columnSet, ok := elem.(map[string]any)
+		if !ok || columnSet["tag"] != "column_set" {
+			continue
+		}
+		columns, ok := columnSet["columns"].([]any)
+		if !ok {
+			t.Fatalf("column_set columns = %#v, want array", columnSet["columns"])
+		}
+		for _, colRaw := range columns {
+			col, ok := colRaw.(map[string]any)
+			if !ok {
+				t.Fatalf("column = %#v, want object", colRaw)
+			}
+			inner, ok := col["elements"].([]any)
+			if !ok || len(inner) != 1 {
+				t.Fatalf("column elements = %#v, want one button", col["elements"])
+			}
+			button, ok := inner[0].(map[string]any)
+			if !ok || button["tag"] != "button" {
+				t.Fatalf("column element = %#v, want button", inner[0])
+			}
+			buttons = append(buttons, button)
+		}
+	}
+	return buttons
+}
+
 func TestRenderCardMap_EqualColumnsActionsUseColumnSet(t *testing.T) {
 	buttons := []core.CardButton{
 		core.PrimaryBtn("Session Management", "nav:/help session"),
@@ -163,6 +208,51 @@ func TestBuildDecisionCardSplitsManyActionsIntoRows(t *testing.T) {
 		if !ok || len(columns) != 3 {
 			t.Fatalf("row %d columns = %#v, want 3 columns", i, set["columns"])
 		}
+	}
+}
+
+func TestBuildDecisionCardLocalizesKnownChoiceLabels(t *testing.T) {
+	dec := core.Decision{
+		ID:          "dec_123",
+		Title:       "巡检通知验证",
+		Message:     "验证按钮展示。",
+		Choices:     []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect", "stop", "abort", "approve"},
+		Recommended: "continue",
+	}
+	got := decodeRenderedCard(t, buildDecisionCard(dec))
+	raw, err := json.Marshal(got)
+	if err != nil {
+		t.Fatalf("marshal rendered card failed: %v", err)
+	}
+	s := string(raw)
+
+	wantLabels := []string{"继续", "暂停", "修改", "忽略", "稍后提醒", "重连", "停止", "停止", "approve"}
+	wantChoices := []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect", "stop", "abort", "approve"}
+	buttons := decisionCardButtons(t, got)
+	if len(buttons) != len(wantChoices) {
+		t.Fatalf("decision buttons = %d, want %d: %#v", len(buttons), len(wantChoices), buttons)
+	}
+	for i, button := range buttons {
+		text, ok := button["text"].(map[string]any)
+		if !ok || text["content"] != wantLabels[i] {
+			t.Fatalf("button %d text = %#v, want %q", i, button["text"], wantLabels[i])
+		}
+		value, ok := button["value"].(map[string]any)
+		if !ok || value["action"] != "decision:respond" || value["decision_choice"] != wantChoices[i] || value["decision_id"] != "dec_123" {
+			t.Fatalf("button %d value = %#v, want decision payload for %q", i, button["value"], wantChoices[i])
+		}
+	}
+	if !strings.Contains(s, `"name":"decision_submit_v1_6465635f313233_636f6e74696e7565"`) {
+		t.Fatalf("decision submit name should include payload fallback, got %s", s)
+	}
+	if !strings.Contains(s, `"name":"decision_submit_v1_6465635f313233_72656d696e645f6c61746572"`) {
+		t.Fatalf("decision submit name should preserve underscore choices, got %s", s)
+	}
+	if strings.Contains(s, `"content":"Optional comment"`) {
+		t.Fatalf("decision comment placeholder should be localized, got %s", s)
+	}
+	if !strings.Contains(s, `"content":"可选备注"`) {
+		t.Fatalf("localized comment placeholder missing from rendered decision card: %s", s)
 	}
 }
 
