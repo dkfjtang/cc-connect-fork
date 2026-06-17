@@ -226,7 +226,7 @@ func TestBuildDecisionCardLocalizesKnownChoiceLabels(t *testing.T) {
 	}
 	s := string(raw)
 
-	wantLabels := []string{"继续", "暂停", "修改", "忽略", "稍后提醒", "重连", "停止", "停止", "approve"}
+	wantLabels := []string{"继续", "暂停", "修改", "忽略", "稍后提醒", "重连", "停止", "停止", "同意"}
 	wantChoices := []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect", "stop", "abort", "approve"}
 	buttons := decisionCardButtons(t, got)
 	if len(buttons) != len(wantChoices) {
@@ -253,6 +253,31 @@ func TestBuildDecisionCardLocalizesKnownChoiceLabels(t *testing.T) {
 	}
 	if !strings.Contains(s, `"content":"可选备注"`) {
 		t.Fatalf("localized comment placeholder missing from rendered decision card: %s", s)
+	}
+}
+
+func TestDecisionChoiceLabelLocalizesCommonEnglishChoices(t *testing.T) {
+	tests := map[string]string{
+		"approve":  "同意",
+		"accept":   "同意",
+		"allow":    "同意",
+		"yes":      "同意",
+		"confirm":  "同意",
+		"proceed":  "同意",
+		"reject":   "拒绝",
+		"decline":  "拒绝",
+		"deny":     "拒绝",
+		"no":       "拒绝",
+		"cancel":   "取消",
+		"retry":    "重试",
+		"skip":     "跳过",
+		"done":     "完成",
+		"complete": "完成",
+	}
+	for choice, want := range tests {
+		if got := decisionChoiceLabel(choice); got != want {
+			t.Fatalf("decisionChoiceLabel(%q) = %q, want %q", choice, got, want)
+		}
 	}
 }
 

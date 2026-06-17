@@ -1412,6 +1412,16 @@ func TestInteractivePlatform_DecisionActionResolvesWithComment(t *testing.T) {
 	if cardResp == nil || cardResp.Card == nil {
 		t.Fatalf("expected card update response, got %#v", cardResp)
 	}
+	raw, err := json.Marshal(cardResp.Card.Data)
+	if err != nil {
+		t.Fatalf("marshal card response: %v", err)
+	}
+	cardJSON := string(raw)
+	for _, want := range []string{"决策已收到", "选择：继续", "备注：Use proxy if slow."} {
+		if !strings.Contains(cardJSON, want) {
+			t.Fatalf("card response missing %q: %s", want, cardJSON)
+		}
+	}
 
 	select {
 	case got := <-respCh:
@@ -1465,6 +1475,54 @@ func TestInteractivePlatform_DecisionActionReadsPayloadFromFormValue(t *testing.
 	select {
 	case got := <-respCh:
 		if got.DecisionID != "dec_123" || got.Choice != "continue" || got.Comment != "继续观察一轮。" {
+			t.Fatalf("decision response = %#v", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("expected decision resolver invocation")
+	}
+}
+
+func TestInteractivePlatform_DecisionActionReadsPayloadFromNestedFormValue(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+
+	respCh := make(chan core.DecisionResponse, 1)
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+		respCh <- resp
+		return nil
+	})
+
+	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				FormValue: map[string]any{
+					"value": map[string]any{
+						"decision_id":     "dec_123",
+						"decision_choice": "approve",
+					},
+					"decision_comment": "同意继续。",
+				},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if cardResp == nil || cardResp.Card == nil {
+		t.Fatalf("expected card update response, got %#v", cardResp)
+	}
+
+	select {
+	case got := <-respCh:
+		if got.DecisionID != "dec_123" || got.Choice != "approve" || got.Comment != "同意继续。" {
 			t.Fatalf("decision response = %#v", got)
 		}
 	case <-time.After(2 * time.Second):

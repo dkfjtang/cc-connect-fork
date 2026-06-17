@@ -64,6 +64,18 @@ func decisionChoiceLabel(choice string) string {
 		return "重连"
 	case "stop", "abort":
 		return "停止"
+	case "approve", "accept", "allow", "yes", "confirm", "proceed":
+		return "同意"
+	case "reject", "decline", "deny", "no":
+		return "拒绝"
+	case "cancel":
+		return "取消"
+	case "retry":
+		return "重试"
+	case "skip":
+		return "跳过"
+	case "done", "complete":
+		return "完成"
 	default:
 		return choice
 	}

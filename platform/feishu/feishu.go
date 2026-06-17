@@ -669,7 +669,10 @@ func (p *Platform) onCardAction(ctx context.Context, event *callback.CardActionT
 			}, nil
 		}
 		cb := core.NewCard().Title("决策已收到", "green")
-		cb.Markdown("已记录本次选择。")
+		cb.Markdown("选择：" + decisionChoiceLabel(decisionChoice))
+		if strings.TrimSpace(comment) != "" {
+			cb.Markdown("备注：" + strings.TrimSpace(comment))
+		}
 		return &callback.CardActionTriggerResponse{
 			Card: &callback.Card{
 				Type: "raw",
@@ -852,11 +855,30 @@ func decisionCallbackString(action *callback.CallBackAction, key string) string 
 	if action == nil {
 		return ""
 	}
-	if v, ok := action.Value[key].(string); ok && strings.TrimSpace(v) != "" {
-		return strings.TrimSpace(v)
+	if v := nestedCallbackString(action.Value, key); v != "" {
+		return v
 	}
 	if action.FormValue != nil {
-		if v, ok := action.FormValue[key].(string); ok && strings.TrimSpace(v) != "" {
+		if v := nestedCallbackString(action.FormValue, key); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func nestedCallbackString(values map[string]any, key string) string {
+	if values == nil {
+		return ""
+	}
+	if v, ok := values[key].(string); ok && strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	for _, nestedKey := range []string{"value", "input_value", "form_value"} {
+		nested, ok := values[nestedKey].(map[string]any)
+		if !ok {
+			continue
+		}
+		if v, ok := nested[key].(string); ok && strings.TrimSpace(v) != "" {
 			return strings.TrimSpace(v)
 		}
 	}
