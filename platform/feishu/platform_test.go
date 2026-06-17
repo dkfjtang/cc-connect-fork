@@ -2302,6 +2302,22 @@ func TestResolveMentions_CardFormat(t *testing.T) {
 	}
 }
 
+func TestResolveMentions_MultilinePlainTextUsesCardFormat(t *testing.T) {
+	p := &Platform{platformName: "feishu", resolveMentions: true}
+	p.chatMemberCache.Store("oc_chat", &chatMemberEntry{
+		members:   map[string]string{"张三": "ou_zhangsan"},
+		fetchedAt: time.Now(),
+	})
+	input := "状态：需要处理\n负责人：@张三\n原因：输出信息被挤在一起"
+	result := p.resolveMentionsInContent(context.Background(), "oc_chat", input)
+	if !strings.Contains(result, "<at id=ou_zhangsan></at>") {
+		t.Fatalf("multiline card format should use <at id=...>, got %q", result)
+	}
+	if strings.Contains(result, `<at user_id="ou_zhangsan">`) {
+		t.Fatalf("multiline card format should not use text at syntax, got %q", result)
+	}
+}
+
 func TestResolveMentions_DisabledByConfig(t *testing.T) {
 	p := &Platform{platformName: "feishu", resolveMentions: false}
 	p.chatMemberCache.Store("oc_chat", &chatMemberEntry{

@@ -2761,7 +2761,7 @@ func detectMimeType(data []byte) string {
 // without actually building the content. Used to select the correct at syntax
 // before building.
 func predictMsgType(content string) string {
-	if !containsMarkdown(content) {
+	if !containsMarkdown(content) && !strings.Contains(content, "\n") {
 		return larkim.MsgTypeText
 	}
 	if countMarkdownTables(content) <= maxCardTables {
@@ -2771,7 +2771,7 @@ func predictMsgType(content string) string {
 }
 
 func buildReplyContent(content string) (msgType string, body string) {
-	if !containsMarkdown(content) {
+	if !containsMarkdown(content) && !strings.Contains(content, "\n") {
 		b, _ := json.Marshal(map[string]string{"text": content})
 		return larkim.MsgTypeText, string(b)
 	}

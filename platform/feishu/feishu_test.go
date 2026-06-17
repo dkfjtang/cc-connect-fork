@@ -2,6 +2,7 @@ package feishu
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -789,6 +790,35 @@ func TestBuildReplyContent_FallbackWhenManyTables(t *testing.T) {
 	msgType5, _ := buildReplyContent(content5)
 	if msgType5 != larkim.MsgTypeInteractive {
 		t.Errorf("expected interactive card for 5 tables, got %s", msgType5)
+	}
+}
+
+func TestBuildReplyContent_UsesCardForMultilinePlainText(t *testing.T) {
+	content := "状态：需要处理\n线程：cc-connect\n原因：输出信息被挤在一起"
+
+	msgType, body := buildReplyContent(content)
+	if msgType != larkim.MsgTypeInteractive {
+		t.Fatalf("msgType = %s, want interactive card", msgType)
+	}
+
+	var card map[string]any
+	if err := json.Unmarshal([]byte(body), &card); err != nil {
+		t.Fatalf("decode card JSON: %v", err)
+	}
+	bodyMap, ok := card["body"].(map[string]any)
+	if !ok {
+		t.Fatalf("card body = %#v, want object", card["body"])
+	}
+	elements, ok := bodyMap["elements"].([]any)
+	if !ok || len(elements) == 0 {
+		t.Fatalf("card elements = %#v, want non-empty array", bodyMap["elements"])
+	}
+	text, ok := elements[0].(map[string]any)["content"].(string)
+	if !ok {
+		t.Fatalf("first element = %#v, want markdown content", elements[0])
+	}
+	if text != content {
+		t.Fatalf("card markdown content = %q, want %q", text, content)
 	}
 }
 
