@@ -1,8 +1,12 @@
-# Windows Daemon Runtime
+# Windows Daemon Runtime (Legacy)
 
-Use this path when the goal is to run against the host Windows Codex runtime
-and Windows project paths. This is the better fit for Codex Desktop session
-compatibility than the WSL Docker runtime.
+This path is kept for upstream compatibility and for reusable build/config
+assets. It is not the current local runtime for this machine.
+
+For the local Feishu + Codex bridge, use the NSSM service flow in
+`deploy/windows-service/README.md`. The `cc-connect daemon install` path on
+Windows creates a Task Scheduler entry, which can conflict with the service
+runtime and leave logon-triggered tasks running.
 
 ## Build
 
@@ -44,4 +48,6 @@ F:\development\cc-connect-fork\dist\cc-connect-v1.3.3-beta.4-windows-amd64.exe d
 F:\development\cc-connect-fork\dist\cc-connect-v1.3.3-beta.4-windows-amd64.exe daemon logs -f
 ```
 
-The Windows daemon uses Task Scheduler and runs hidden under the current user.
+Do not run the install commands above for the current local service deployment
+unless you are intentionally testing the legacy Task Scheduler mode. The Windows
+daemon uses Task Scheduler and runs hidden under the current user.

@@ -1,11 +1,18 @@
 # Windows Service Runtime
 
+This is the current Windows runtime for the local Feishu + Codex bridge.
+
 Use this runtime when cc-connect should run as a real Windows Service instead
 of the built-in Windows Task Scheduler daemon.
 
 The service uses NSSM as a wrapper around the compiled `cc-connect.exe`.
 This avoids changing fork code and keeps local service management separate from
 upstream cc-connect changes.
+
+Do not install the local runtime through `cc-connect daemon install` on this
+machine. On Windows that upstream daemon path creates a Task Scheduler entry,
+which can conflict with the NSSM service and leave old logon-triggered tasks
+running after the service migration.
 
 ## Files
 
@@ -75,3 +82,17 @@ The service runs as `LocalSystem` by default unless you change it in Windows
 Service Manager or NSSM. If Codex authentication or user-specific files
 are not visible under `LocalSystem`, configure the service Log On account to
 the Windows user that owns `C:\Users\Administrator\.codex`.
+
+If a PowerShell window still appears at logon, check for unrelated or legacy
+scheduled tasks before changing this service:
+
+```powershell
+Get-ScheduledTask | Where-Object {
+  $_.TaskName -match 'cc-connect|WSLDashboard|wsl|port|proxy' -or
+  $_.TaskPath -match 'cc-connect|WSLDashboard|wsl|port|proxy' -or
+  ($_.Actions | Out-String) -match 'cc-connect|WSLDashboard|wsl|port|proxy'
+}
+```
+
+The expected cc-connect runtime is the Windows service named
+`cc-connect-codex-feishu`, not a logon-triggered scheduled task.
