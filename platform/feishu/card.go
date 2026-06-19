@@ -25,7 +25,9 @@ func buildDecisionCard(dec core.Decision) *core.Card {
 	}
 	cb := core.NewCard().Title(title, "orange")
 	if strings.TrimSpace(dec.Message) != "" {
-		cb.Markdown(dec.Message)
+		for _, line := range formatDecisionMessageMarkdownLines(dec.Message) {
+			cb.Markdown(line)
+		}
 	}
 	var buttons []core.CardButton
 	for _, choice := range dec.Choices {
@@ -78,6 +80,84 @@ func decisionChoiceLabel(choice string) string {
 		return "完成"
 	default:
 		return choice
+	}
+}
+
+func formatDecisionMessageMarkdownLines(message string) []string {
+	message = normalizeDecisionMessageLineBreaks(strings.TrimSpace(message))
+	if message == "" {
+		return nil
+	}
+
+	for _, label := range decisionMessageLabels() {
+		message = insertLineBreakBeforeLabel(message, label)
+	}
+
+	lines := strings.Split(message, "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		out = append(out, formatDecisionMessageLine(line))
+	}
+	return out
+}
+
+func normalizeDecisionMessageLineBreaks(message string) string {
+	replacer := strings.NewReplacer(
+		"\r\n", "\n",
+		"\r", "\n",
+		"`r`n", "\n",
+		"`n", "\n",
+	)
+	return replacer.Replace(message)
+}
+
+func insertLineBreakBeforeLabel(message, label string) string {
+	var b strings.Builder
+	start := 0
+	for {
+		idx := strings.Index(message[start:], label)
+		if idx < 0 {
+			b.WriteString(message[start:])
+			return b.String()
+		}
+		idx += start
+		if idx > 0 && message[idx-1] != '\n' {
+			b.WriteString(message[start:idx])
+			b.WriteByte('\n')
+		} else {
+			b.WriteString(message[start:idx])
+		}
+		b.WriteString(label)
+		start = idx + len(label)
+	}
+}
+
+func formatDecisionMessageLine(line string) string {
+	for _, label := range decisionMessageLabels() {
+		if strings.HasPrefix(line, label) {
+			value := strings.TrimSpace(strings.TrimPrefix(line, label))
+			if value == "" {
+				return "**" + label + "**"
+			}
+			return "**" + label + "** " + value
+		}
+	}
+	return line
+}
+
+func decisionMessageLabels() []string {
+	return []string{
+		"线程：",
+		"线程标题：",
+		"判断类型：",
+		"最近进展：",
+		"需要用户决策：",
+		"需要用户决策的问题：",
+		"建议动作：",
 	}
 }
 

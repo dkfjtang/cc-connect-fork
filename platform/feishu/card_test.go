@@ -211,6 +211,111 @@ func TestBuildDecisionCardSplitsManyActionsIntoRows(t *testing.T) {
 	}
 }
 
+func TestBuildDecisionCardFormatsAutomationMessageIntoReadableLines(t *testing.T) {
+	dec := core.Decision{
+		ID:      "dec_automation",
+		Title:   "Codex线程疑似中断：整理项目进度",
+		Message: "线程： 整理项目进度 （019ec912-3a2d-7472-ba84-964e136b5acb） `n判断类型： 疑似中断 / systemError `n最近进展： 12:01 巡检时仍为 active，12:15 巡检时状态变为 systemError；线程工作区为 F:\\development\\acs。 `n需要用户决策： 是否请求目标线程重连/唤醒，继续整理项目进度情况。 `n建议动作： reconnect，要求目标线程恢复后先报告当前阶段、已完成项、未完成项、是否有未提交变更和下一步。",
+		Choices: []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+	}
+	got := decodeRenderedCard(t, buildDecisionCard(dec))
+
+	elements := got["elements"].([]any)
+	form := elements[0].(map[string]any)
+	formElements := form["elements"].([]any)
+	var markdownContents []string
+	for _, raw := range formElements {
+		elem, ok := raw.(map[string]any)
+		if ok && elem["tag"] == "markdown" {
+			content, _ := elem["content"].(string)
+			markdownContents = append(markdownContents, content)
+		}
+	}
+	content := strings.Join(markdownContents, "\n")
+	for _, want := range []string{
+		"**线程：** 整理项目进度",
+		"\n**判断类型：** 疑似中断 / systemError",
+		"\n**最近进展：** 12:01 巡检时仍为 active",
+		"\n**需要用户决策：** 是否请求目标线程重连/唤醒",
+		"\n**建议动作：** reconnect",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("formatted decision message missing %q: %q", want, content)
+		}
+	}
+	if strings.Contains(content, "`n") {
+		t.Fatalf("formatted decision message should normalize literal backtick-newline markers: %q", content)
+	}
+}
+
+func TestBuildDecisionCardFormatsWatchdogMessageFieldsAsSeparateMarkdownElements(t *testing.T) {
+	dec := core.Decision{
+		ID:      "dec_watchdog",
+		Title:   "Codex 巡检：整理项目进度疑似卡点",
+		Message: "线程标题： 整理项目进度 `n判断类型： 疑似卡点 `n最近进展： 阶段 6-7 收口切片已修改 checker、文档和测试，并通过最小验证及全局阶段门禁；最后输出停在清理 .tmp 临时目录前后。 `n需要用户决策的问题： 该线程连续两轮巡检没有有效新输出，可能仍在执行清理/提交前复核，也可能卡在长任务或终端无输出。 `n建议动作： 选择 continue 让目标线程按当前方案继续并汇报状态；如怀疑执行中断可选 reconnect。",
+		Choices: []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+	}
+	got := decodeRenderedCard(t, buildDecisionCard(dec))
+
+	elements := got["elements"].([]any)
+	form := elements[0].(map[string]any)
+	formElements := form["elements"].([]any)
+	var markdownContents []string
+	for _, raw := range formElements {
+		elem, ok := raw.(map[string]any)
+		if ok && elem["tag"] == "markdown" {
+			content, _ := elem["content"].(string)
+			markdownContents = append(markdownContents, content)
+		}
+	}
+	wantContents := []string{
+		"**线程标题：** 整理项目进度",
+		"**判断类型：** 疑似卡点",
+		"**最近进展：** 阶段 6-7 收口切片已修改 checker",
+		"**需要用户决策的问题：** 该线程连续两轮巡检没有有效新输出",
+		"**建议动作：** 选择 continue 让目标线程按当前方案继续并汇报状态",
+	}
+	if len(markdownContents) != len(wantContents) {
+		t.Fatalf("markdown element count = %d, want %d: %#v", len(markdownContents), len(wantContents), markdownContents)
+	}
+	for i, want := range wantContents {
+		if !strings.Contains(markdownContents[i], want) {
+			t.Fatalf("markdown element %d = %q, want to contain %q", i, markdownContents[i], want)
+		}
+		if strings.Contains(markdownContents[i], "`n") {
+			t.Fatalf("markdown element %d still contains literal backtick newline: %q", i, markdownContents[i])
+		}
+	}
+}
+
+func TestBuildDecisionCardDoesNotTreatWindowsPathBackslashNAsNewline(t *testing.T) {
+	dec := core.Decision{
+		ID:      "dec_path",
+		Title:   "路径保护",
+		Message: `线程标题： 检查路径 最近进展： 工作区在 C:\new\cc-connect，日志正常。 建议动作： continue`,
+		Choices: []string{"continue"},
+	}
+	got := decodeRenderedCard(t, buildDecisionCard(dec))
+
+	elements := got["elements"].([]any)
+	form := elements[0].(map[string]any)
+	formElements := form["elements"].([]any)
+	var content string
+	for _, raw := range formElements {
+		elem, ok := raw.(map[string]any)
+		if ok && elem["tag"] == "markdown" {
+			part, _ := elem["content"].(string)
+			content += part + "\n"
+		}
+	}
+	if !strings.Contains(content, `C:\new\cc-connect`) {
+		t.Fatalf("windows path should keep literal backslash-n segment, got %q", content)
+	}
+	if strings.Contains(content, "C:\new") {
+		t.Fatalf("test fixture should use a literal backslash-n path, got actual newline in %q", content)
+	}
+}
+
 func TestBuildDecisionCardLocalizesKnownChoiceLabels(t *testing.T) {
 	dec := core.Decision{
 		ID:          "dec_123",
