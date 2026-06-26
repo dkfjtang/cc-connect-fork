@@ -141,7 +141,7 @@ type Platform struct {
 	wsClient           *larkws.Client
 	handler            core.MessageHandler
 	cardNavHandler     core.CardNavigationHandler
-	decisionResponder  func(context.Context, core.DecisionResponse) error
+	decisionResponder  func(context.Context, core.DecisionResponse) (core.DecisionRecord, error)
 	cancel             context.CancelFunc
 	dedup              *core.MessageDedup
 	botOpenID          string
@@ -194,7 +194,7 @@ func (p *Platform) SetCardNavigationHandler(h core.CardNavigationHandler) {
 	p.cardNavHandler = h
 }
 
-func (p *Platform) SetDecisionResponder(h func(context.Context, core.DecisionResponse) error) {
+func (p *Platform) SetDecisionResponder(h func(context.Context, core.DecisionResponse) (core.DecisionRecord, error)) {
 	p.decisionResponder = h
 }
 
@@ -641,11 +641,12 @@ func (p *Platform) onCardAction(ctx context.Context, event *callback.CardActionT
 		if comment == "" {
 			comment = decisionCallbackString(event.Event.Action, "decision_comment")
 		}
-		if err := p.decisionResponder(ctx, core.DecisionResponse{
+		record, err := p.decisionResponder(ctx, core.DecisionResponse{
 			DecisionID: decisionID,
 			Choice:     decisionChoice,
 			Comment:    comment,
-		}); err != nil {
+		})
+		if err != nil {
 			switch {
 			case errors.Is(err, core.ErrDecisionTimeout):
 				slog.Warn(p.tag()+": decision expired", "decision_id", decisionID)
@@ -668,15 +669,11 @@ func (p *Platform) onCardAction(ctx context.Context, event *callback.CardActionT
 				Toast: &callback.Toast{Type: "error", Content: "决策处理失败"},
 			}, nil
 		}
-		cb := core.NewCard().Title("决策已收到", "green")
-		cb.Markdown("选择：" + decisionChoiceLabel(decisionChoice))
-		if strings.TrimSpace(comment) != "" {
-			cb.Markdown("备注：" + strings.TrimSpace(comment))
-		}
+		cb := buildDecisionAcknowledgementCard(record)
 		return &callback.CardActionTriggerResponse{
 			Card: &callback.Card{
 				Type: "raw",
-				Data: renderCardMap(cb.Build(), sessionKey),
+				Data: renderCardMap(cb, sessionKey),
 			},
 		}, nil
 	}
@@ -3339,6 +3336,42 @@ func (p *interactivePlatform) SendDecisionRequest(ctx context.Context, dec core.
 	}
 	cardJSON := renderCard(buildDecisionCard(dec), "")
 	return p.createUserMessage(ctx, userID, larkim.MsgTypeInteractive, cardJSON, "send decision request")
+}
+
+func buildDecisionAcknowledgementCard(record core.DecisionRecord) *core.Card {
+	title := "决策已收到"
+	decisionChoice := ""
+	comment := ""
+	if record.Response != nil {
+		decisionChoice = record.Response.Choice
+		comment = record.Response.Comment
+	}
+	dec := record.Decision
+	if strings.TrimSpace(dec.ID) != "" {
+		title = strings.TrimSpace(dec.Title)
+		if title == "" {
+			title = "决策已收到"
+		}
+		cb := core.NewCard().Title(title, "green")
+		if strings.TrimSpace(dec.Message) != "" {
+			for _, line := range formatDecisionMessageMarkdownLines(dec.Message) {
+				cb.Markdown(line)
+			}
+			cb.Divider()
+		}
+		cb.Markdown("裁决已收到")
+		cb.Markdown("选择：" + decisionChoiceLabel(decisionChoice))
+		if strings.TrimSpace(comment) != "" {
+			cb.Markdown("备注：" + strings.TrimSpace(comment))
+		}
+		return cb.Build()
+	}
+	cb := core.NewCard().Title(title, "green")
+	cb.Markdown("选择：" + decisionChoiceLabel(decisionChoice))
+	if strings.TrimSpace(comment) != "" {
+		cb.Markdown("备注：" + strings.TrimSpace(comment))
+	}
+	return cb.Build()
 }
 
 func (p *interactivePlatform) reserveDecisionSendSlot(now time.Time) time.Time {

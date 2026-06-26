@@ -1387,9 +1387,9 @@ func TestInteractivePlatform_DecisionActionResolvesWithComment(t *testing.T) {
 	}
 
 	respCh := make(chan core.DecisionResponse, 1)
-	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) (core.DecisionRecord, error) {
 		respCh <- resp
-		return nil
+		return core.DecisionRecord{Decision: core.Decision{ID: resp.DecisionID}, Response: &resp}, nil
 	})
 
 	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
@@ -1433,6 +1433,85 @@ func TestInteractivePlatform_DecisionActionResolvesWithComment(t *testing.T) {
 	}
 }
 
+func TestInteractivePlatform_DecisionActionKeepsOriginalPromptInAcknowledgement(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+	decision := core.Decision{
+		ID:      "dec_123",
+		Title:   "Codex线程疑似中断：整理项目进度",
+		Message: "线程标题： 整理项目进度 `n判断类型： 疑似中断 / systemError `n最近进展： 巡检发现线程进入 systemError。 `n需要用户决策： 是否请求目标线程重连/唤醒。 `n建议动作： reconnect。",
+		Choices: []string{"continue", "reconnect"},
+	}
+
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) (core.DecisionRecord, error) {
+		return core.DecisionRecord{Decision: decision, Response: &resp}, nil
+	})
+
+	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				Value: map[string]any{
+					"action":          "decision:respond",
+					"decision_id":     "dec_123",
+					"decision_choice": "reconnect",
+				},
+				FormValue: map[string]any{"decision_comment": "继续观察一轮。"},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if cardResp == nil || cardResp.Card == nil {
+		t.Fatalf("expected card update response, got %#v", cardResp)
+	}
+	raw, err := json.Marshal(cardResp.Card.Data)
+	if err != nil {
+		t.Fatalf("marshal card response: %v", err)
+	}
+	cardJSON := string(raw)
+	for _, want := range []string{
+		"Codex线程疑似中断：整理项目进度",
+		"**线程标题：** 整理项目进度",
+		"**判断类型：** 疑似中断 / systemError",
+		"**最近进展：** 巡检发现线程进入 systemError。",
+		"**需要用户决策：** 是否请求目标线程重连/唤醒。",
+		"裁决已收到",
+		"选择：重连",
+		"备注：继续观察一轮。",
+	} {
+		if !strings.Contains(cardJSON, want) {
+			t.Fatalf("card response missing %q: %s", want, cardJSON)
+		}
+	}
+}
+
+func TestBuildDecisionAcknowledgementCardFallsBackWithoutDecision(t *testing.T) {
+	resp := &core.DecisionResponse{Choice: "continue", Comment: "ok"}
+	card := buildDecisionAcknowledgementCard(core.DecisionRecord{Response: resp})
+	raw, err := json.Marshal(renderCardMap(card, ""))
+	if err != nil {
+		t.Fatalf("marshal card response: %v", err)
+	}
+	cardJSON := string(raw)
+	for _, want := range []string{"决策已收到", "选择：继续", "备注：ok"} {
+		if !strings.Contains(cardJSON, want) {
+			t.Fatalf("card response missing %q: %s", want, cardJSON)
+		}
+	}
+	if strings.Contains(cardJSON, "线程标题：") {
+		t.Fatalf("fallback card should not invent original prompt content: %s", cardJSON)
+	}
+}
+
 func TestInteractivePlatform_DecisionActionReadsPayloadFromFormValue(t *testing.T) {
 	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
 	if err != nil {
@@ -1444,9 +1523,9 @@ func TestInteractivePlatform_DecisionActionReadsPayloadFromFormValue(t *testing.
 	}
 
 	respCh := make(chan core.DecisionResponse, 1)
-	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) (core.DecisionRecord, error) {
 		respCh <- resp
-		return nil
+		return core.DecisionRecord{Decision: core.Decision{ID: resp.DecisionID}, Response: &resp}, nil
 	})
 
 	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
@@ -1493,9 +1572,9 @@ func TestInteractivePlatform_DecisionActionReadsPayloadFromNestedFormValue(t *te
 	}
 
 	respCh := make(chan core.DecisionResponse, 1)
-	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) (core.DecisionRecord, error) {
 		respCh <- resp
-		return nil
+		return core.DecisionRecord{Decision: core.Decision{ID: resp.DecisionID}, Response: &resp}, nil
 	})
 
 	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
@@ -1541,9 +1620,9 @@ func TestInteractivePlatform_DecisionActionReadsPayloadFromSubmitName(t *testing
 	}
 
 	respCh := make(chan core.DecisionResponse, 1)
-	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) (core.DecisionRecord, error) {
 		respCh <- resp
-		return nil
+		return core.DecisionRecord{Decision: core.Decision{ID: resp.DecisionID}, Response: &resp}, nil
 	})
 
 	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
@@ -1584,9 +1663,9 @@ func TestInteractivePlatform_DecisionActionReadsCustomChoiceFromSubmitName(t *te
 	}
 
 	respCh := make(chan core.DecisionResponse, 1)
-	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) error {
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) (core.DecisionRecord, error) {
 		respCh <- resp
-		return nil
+		return core.DecisionRecord{Decision: core.Decision{ID: resp.DecisionID}, Response: &resp}, nil
 	})
 
 	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
@@ -1627,9 +1706,9 @@ func TestInteractivePlatform_LegacyDecisionSubmitNameWithoutPayloadDoesNotResolv
 	}
 
 	called := false
-	ip.SetDecisionResponder(func(_ context.Context, _ core.DecisionResponse) error {
+	ip.SetDecisionResponder(func(_ context.Context, _ core.DecisionResponse) (core.DecisionRecord, error) {
 		called = true
-		return nil
+		return core.DecisionRecord{}, nil
 	})
 
 	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
@@ -1663,8 +1742,8 @@ func TestInteractivePlatform_DecisionActionReportsExpiredDecision(t *testing.T) 
 		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
 	}
 
-	ip.SetDecisionResponder(func(_ context.Context, _ core.DecisionResponse) error {
-		return core.ErrDecisionTimeout
+	ip.SetDecisionResponder(func(_ context.Context, _ core.DecisionResponse) (core.DecisionRecord, error) {
+		return core.DecisionRecord{}, core.ErrDecisionTimeout
 	})
 
 	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
@@ -1701,8 +1780,8 @@ func TestInteractivePlatform_DecisionActionReportsResolvedDecision(t *testing.T)
 		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
 	}
 
-	ip.SetDecisionResponder(func(_ context.Context, _ core.DecisionResponse) error {
-		return core.ErrDecisionResolved
+	ip.SetDecisionResponder(func(_ context.Context, _ core.DecisionResponse) (core.DecisionRecord, error) {
+		return core.DecisionRecord{}, core.ErrDecisionResolved
 	})
 
 	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
@@ -1739,8 +1818,8 @@ func TestInteractivePlatform_DecisionActionReportsNotFoundDecision(t *testing.T)
 		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
 	}
 
-	ip.SetDecisionResponder(func(_ context.Context, _ core.DecisionResponse) error {
-		return core.ErrDecisionNotFound
+	ip.SetDecisionResponder(func(_ context.Context, _ core.DecisionResponse) (core.DecisionRecord, error) {
+		return core.DecisionRecord{}, core.ErrDecisionNotFound
 	})
 
 	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{

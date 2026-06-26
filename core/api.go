@@ -124,11 +124,24 @@ func (s *APIServer) SetDecisionNotifier(n DecisionNotifier) {
 	s.notifier = n
 }
 
-func (s *APIServer) ResolveDecision(ctx context.Context, resp DecisionResponse) error {
+type decisionRespondResponse struct {
+	Status   string            `json:"status"`
+	Decision Decision          `json:"decision"`
+	Response *DecisionResponse `json:"response,omitempty"`
+}
+
+func (s *APIServer) ResolveDecision(ctx context.Context, resp DecisionResponse) (DecisionRecord, error) {
 	if s.decisions == nil {
-		return ErrDecisionNotFound
+		return DecisionRecord{}, ErrDecisionNotFound
 	}
-	return s.decisions.Resolve(resp.DecisionID, resp)
+	if err := s.decisions.Resolve(resp.DecisionID, resp); err != nil {
+		return DecisionRecord{}, err
+	}
+	record, err := s.decisions.Get(resp.DecisionID)
+	if err != nil {
+		return DecisionRecord{}, err
+	}
+	return record, nil
 }
 
 func (s *APIServer) Start() {
@@ -306,7 +319,8 @@ func (s *APIServer) handleDecisionRespond(w http.ResponseWriter, r *http.Request
 		http.Error(w, "choice is required", http.StatusBadRequest)
 		return
 	}
-	if err := s.ResolveDecision(r.Context(), resp); err != nil {
+	record, err := s.ResolveDecision(r.Context(), resp)
+	if err != nil {
 		switch {
 		case errors.Is(err, ErrDecisionNotFound):
 			http.Error(w, err.Error(), http.StatusNotFound)
@@ -323,7 +337,11 @@ func (s *APIServer) handleDecisionRespond(w http.ResponseWriter, r *http.Request
 		}
 		return
 	}
-	apiJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	apiJSON(w, http.StatusOK, decisionRespondResponse{
+		Status:   "ok",
+		Decision: record.Decision,
+		Response: record.Response,
+	})
 }
 
 func (s *APIServer) handleDecisionGet(w http.ResponseWriter, r *http.Request) {

@@ -114,6 +114,22 @@ func TestDecisionAPIAskRespondGet(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("respond status = %d, body=%s", rec.Code, rec.Body.String())
 	}
+	var respondRecord struct {
+		Status string `json:"status"`
+		DecisionRecord
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &respondRecord); err != nil {
+		t.Fatalf("decode respond record: %v", err)
+	}
+	if respondRecord.Status != "ok" {
+		t.Fatalf("respond status field = %q", respondRecord.Status)
+	}
+	if respondRecord.Decision.ID != dec.ID || respondRecord.Decision.Message != "Proceed?" {
+		t.Fatalf("respond record decision = %#v", respondRecord.Decision)
+	}
+	if respondRecord.Response == nil || respondRecord.Response.Choice != "continue" || respondRecord.Response.Comment != "Use proxy if slow." {
+		t.Fatalf("respond record response = %#v", respondRecord.Response)
+	}
 
 	req = httptest.NewRequest(http.MethodGet, "/decision/get?id="+dec.ID, nil)
 	rec = httptest.NewRecorder()
@@ -126,6 +142,47 @@ func TestDecisionAPIAskRespondGet(t *testing.T) {
 		t.Fatalf("decode record: %v", err)
 	}
 	if record.Response == nil || record.Response.Choice != "continue" || record.Response.Comment != "Use proxy if slow." {
+		t.Fatalf("record response = %#v", record.Response)
+	}
+}
+
+func TestDecisionAPIResolveAfterPersistentReloadReturnsOriginalDecision(t *testing.T) {
+	dataDir := t.TempDir()
+	store, err := NewPersistentDecisionStore(dataDir)
+	if err != nil {
+		t.Fatalf("NewPersistentDecisionStore: %v", err)
+	}
+	dec, err := store.Create(DecisionAskRequest{
+		Title:       "Codex线程疑似中断：整理项目进度",
+		Message:     "线程标题： 整理项目进度 `n判断类型： 疑似中断 / systemError `n最近进展： 巡检发现线程进入 systemError。",
+		Choices:     []string{"continue", "reconnect"},
+		Recommended: "reconnect",
+		Timeout:     time.Minute,
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := store.MarkNotified(dec.ID); err != nil {
+		t.Fatalf("MarkNotified: %v", err)
+	}
+
+	reloaded, err := NewPersistentDecisionStore(dataDir)
+	if err != nil {
+		t.Fatalf("reload NewPersistentDecisionStore: %v", err)
+	}
+	api := &APIServer{decisions: reloaded}
+	record, err := api.ResolveDecision(context.Background(), DecisionResponse{
+		DecisionID: dec.ID,
+		Choice:     "reconnect",
+		Comment:    "继续观察一轮。",
+	})
+	if err != nil {
+		t.Fatalf("ResolveDecision after reload: %v", err)
+	}
+	if record.Decision.ID != dec.ID || record.Decision.Message != dec.Message {
+		t.Fatalf("record decision = %#v, want original message %q", record.Decision, dec.Message)
+	}
+	if record.Response == nil || record.Response.DecisionID != dec.ID || record.Response.Choice != "reconnect" || record.Response.Comment != "继续观察一轮。" {
 		t.Fatalf("record response = %#v", record.Response)
 	}
 }

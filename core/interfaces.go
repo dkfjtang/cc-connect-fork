@@ -578,7 +578,7 @@ type DecisionNotifier interface {
 // DecisionResponder lets a platform receive a decision-resolution callback from
 // the local API server.
 type DecisionResponder interface {
-	SetDecisionResponder(func(context.Context, DecisionResponse) error)
+	SetDecisionResponder(func(context.Context, DecisionResponse) (DecisionRecord, error))
 }
 
 // ChannelNameResolver is an optional interface for platforms that can resolve
