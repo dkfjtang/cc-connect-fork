@@ -1568,6 +1568,79 @@ func TestInteractivePlatform_DecisionActionFormatsNaturalPromptInAcknowledgement
 	}
 }
 
+func TestInteractivePlatform_DecisionActionFormatsRealNaturalPromptInAcknowledgement(t *testing.T) {
+	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	ip, ok := platformAny.(*interactivePlatform)
+	if !ok {
+		t.Fatalf("platform type = %T, want *interactivePlatform", platformAny)
+	}
+	decision := core.Decision{
+		ID:      "dec_real_natural_ack",
+		Title:   "Codex 巡检：线程 019f01ce 出现 systemError",
+		Message: "线程 019f01ce-d4d3-7312-a726-c234bfb5a4f5（IDSS 最高等级发版门禁专家组复审）从正常执行刷新为 systemError / interrupted。最后进展仍是授权执行中的本地治理复审，无 waitingOnApproval；按规则不自动继续或重连，建议选择 continue 或 reconnect。",
+		Choices: []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+	}
+
+	ip.SetDecisionResponder(func(_ context.Context, resp core.DecisionResponse) (core.DecisionRecord, error) {
+		return core.DecisionRecord{Decision: decision, Response: &resp}, nil
+	})
+
+	cardResp, err := ip.onCardAction(context.Background(), &callback.CardActionTriggerEvent{
+		Event: &callback.CardActionTriggerRequest{
+			Operator: &callback.Operator{OpenID: "ou_test_user"},
+			Action: &callback.CallBackAction{
+				Value: map[string]any{
+					"action":          "decision:respond",
+					"decision_id":     "dec_real_natural_ack",
+					"decision_choice": "continue",
+				},
+			},
+			Context: &callback.Context{OpenChatID: "oc_test_chat", OpenMessageID: "om_test_message"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("onCardAction() error = %v", err)
+	}
+	if cardResp == nil || cardResp.Card == nil {
+		t.Fatalf("expected card update response, got %#v", cardResp)
+	}
+
+	data, ok := cardResp.Card.Data.(map[string]any)
+	if !ok {
+		t.Fatalf("card data = %T, want map[string]any", cardResp.Card.Data)
+	}
+	elements, ok := data["elements"].([]map[string]any)
+	if !ok {
+		t.Fatalf("card elements = %#v, want []map[string]any", data["elements"])
+	}
+
+	var markdownContents []string
+	for _, elem := range elements {
+		if elem["tag"] == "markdown" {
+			content, _ := elem["content"].(string)
+			markdownContents = append(markdownContents, content)
+		}
+	}
+	wantContents := []string{
+		"**线程：** 019f01ce-d4d3-7312-a726-c234bfb5a4f5",
+		"**最近进展：** （IDSS 最高等级发版门禁专家组复审）从正常执行刷新为 systemError / interrupted。最后进展仍是授权执行中的本地治理复审，无 waitingOnApproval；按规则不自动继续或重连，",
+		"**建议动作：** 选择 continue 或 reconnect。",
+		"裁决已收到",
+		"选择：继续",
+	}
+	if len(markdownContents) != len(wantContents) {
+		t.Fatalf("markdown element count = %d, want %d: %#v", len(markdownContents), len(wantContents), markdownContents)
+	}
+	for i, want := range wantContents {
+		if markdownContents[i] != want {
+			t.Fatalf("markdown content %d = %q, want %q", i, markdownContents[i], want)
+		}
+	}
+}
+
 func TestInteractivePlatform_DecisionActionFormatsOwnerPromptInAcknowledgement(t *testing.T) {
 	platformAny, err := New(map[string]any{"app_id": "cli_xxx", "app_secret": "secret", "enable_feishu_card": true})
 	if err != nil {

@@ -18,6 +18,33 @@ func decodeRenderedCard(t *testing.T, card *core.Card) map[string]any {
 	return got
 }
 
+func decisionCardMarkdownContents(t *testing.T, got map[string]any) []string {
+	t.Helper()
+
+	elements, ok := got["elements"].([]any)
+	if !ok || len(elements) != 1 {
+		t.Fatalf("elements = %#v, want one decision form", got["elements"])
+	}
+	form, ok := elements[0].(map[string]any)
+	if !ok || form["tag"] != "form" {
+		t.Fatalf("first element = %#v, want form", elements[0])
+	}
+	formElements, ok := form["elements"].([]any)
+	if !ok {
+		t.Fatalf("form elements = %#v, want array", form["elements"])
+	}
+
+	var markdownContents []string
+	for _, raw := range formElements {
+		elem, ok := raw.(map[string]any)
+		if ok && elem["tag"] == "markdown" {
+			content, _ := elem["content"].(string)
+			markdownContents = append(markdownContents, content)
+		}
+	}
+	return markdownContents
+}
+
 func decisionCardButtons(t *testing.T, got map[string]any) []map[string]any {
 	t.Helper()
 
@@ -321,6 +348,160 @@ func TestBuildDecisionCardFormatsNaturalDecisionMessageIntoReadableLines(t *test
 		if markdownContents[i] != want {
 			t.Fatalf("markdown content %d = %q, want %q", i, markdownContents[i], want)
 		}
+	}
+}
+
+func TestBuildDecisionCardFormatsRealNaturalDecisionMessageIntoReadableLines(t *testing.T) {
+	dec := core.Decision{
+		ID:      "dec_real_natural",
+		Title:   "Codex 巡检：线程 019f01ce 出现 systemError",
+		Message: "线程 019f01ce-d4d3-7312-a726-c234bfb5a4f5（IDSS 最高等级发版门禁专家组复审）从正常执行刷新为 systemError / interrupted。最后进展仍是授权执行中的本地治理复审，无 waitingOnApproval；按规则不自动继续或重连，建议选择 continue 或 reconnect。",
+		Choices: []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+	}
+	got := decodeRenderedCard(t, buildDecisionCard(dec))
+
+	elements := got["elements"].([]any)
+	form := elements[0].(map[string]any)
+	formElements := form["elements"].([]any)
+	var markdownContents []string
+	for _, raw := range formElements {
+		elem, ok := raw.(map[string]any)
+		if ok && elem["tag"] == "markdown" {
+			content, _ := elem["content"].(string)
+			markdownContents = append(markdownContents, content)
+		}
+	}
+	wantContents := []string{
+		"**线程：** 019f01ce-d4d3-7312-a726-c234bfb5a4f5",
+		"**最近进展：** （IDSS 最高等级发版门禁专家组复审）从正常执行刷新为 systemError / interrupted。最后进展仍是授权执行中的本地治理复审，无 waitingOnApproval；按规则不自动继续或重连，",
+		"**建议动作：** 选择 continue 或 reconnect。",
+	}
+	if len(markdownContents) != len(wantContents) {
+		t.Fatalf("markdown element count = %d, want %d: %#v", len(markdownContents), len(wantContents), markdownContents)
+	}
+	for i, want := range wantContents {
+		if markdownContents[i] != want {
+			t.Fatalf("markdown content %d = %q, want %q", i, markdownContents[i], want)
+		}
+	}
+}
+
+func TestBuildDecisionCardFormatsRealThreadTitleWithParentheses(t *testing.T) {
+	dec := core.Decision{
+		ID:      "dec_real_thread_title",
+		Title:   "Codex 巡检：线程 019f01ce 出现 systemError",
+		Message: "线程 019f01ce-d4d3-7312-a726-c234bfb5a4f5（IDSS 最高等级发版门禁专家组复审）从正常执行刷新为 systemError / interrupted。建议选择 continue 或 reconnect。",
+		Choices: []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+	}
+	got := decodeRenderedCard(t, buildDecisionCard(dec))
+
+	elements := got["elements"].([]any)
+	form := elements[0].(map[string]any)
+	formElements := form["elements"].([]any)
+	var markdownContents []string
+	for _, raw := range formElements {
+		elem, ok := raw.(map[string]any)
+		if ok && elem["tag"] == "markdown" {
+			content, _ := elem["content"].(string)
+			markdownContents = append(markdownContents, content)
+		}
+	}
+	if len(markdownContents) != 3 {
+		t.Fatalf("markdown element count = %d, want 3: %#v", len(markdownContents), markdownContents)
+	}
+	if markdownContents[0] != "**线程：** 019f01ce-d4d3-7312-a726-c234bfb5a4f5" {
+		t.Fatalf("thread markdown = %q, want pure uuid", markdownContents[0])
+	}
+	if !strings.Contains(markdownContents[1], "（IDSS 最高等级发版门禁专家组复审）从正常执行刷新为 systemError / interrupted。") {
+		t.Fatalf("detail markdown missing parenthesized title: %q", markdownContents[1])
+	}
+	if markdownContents[2] != "**建议动作：** 选择 continue 或 reconnect。" {
+		t.Fatalf("suggestion markdown = %q, want suggestion line", markdownContents[2])
+	}
+}
+
+func TestBuildDecisionCardFormatsSemicolonSuggestionVariant(t *testing.T) {
+	dec := core.Decision{
+		ID:      "dec_semicolon_natural",
+		Title:   "Codex 巡检待决策：IDSS 生产/主线对齐风险",
+		Message: "线程 019f01ce-d4d3-7312-a726-c234bfb5a4f5（IDSS 最高等级发版门禁专家组复审）从正常执行刷新为 systemError / interrupted；建议选择 continue 或 reconnect。",
+		Choices: []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+	}
+	got := decodeRenderedCard(t, buildDecisionCard(dec))
+
+	elements := got["elements"].([]any)
+	form := elements[0].(map[string]any)
+	formElements := form["elements"].([]any)
+	var markdownContents []string
+	for _, raw := range formElements {
+		elem, ok := raw.(map[string]any)
+		if ok && elem["tag"] == "markdown" {
+			content, _ := elem["content"].(string)
+			markdownContents = append(markdownContents, content)
+		}
+	}
+	if len(markdownContents) != 3 {
+		t.Fatalf("markdown element count = %d, want 3: %#v", len(markdownContents), markdownContents)
+	}
+	if markdownContents[2] != "**建议动作：** 选择 continue 或 reconnect。" {
+		t.Fatalf("semicolon variant suggestion markdown = %q, want suggestion line", markdownContents[2])
+	}
+}
+
+func TestBuildDecisionCardFormatsRecommendationMarkerVariants(t *testing.T) {
+	tests := []struct {
+		name    string
+		message string
+	}{
+		{
+			name:    "comma recommendation",
+			message: "线程 019f01ce-d4d3-7312-a726-c234bfb5a4f5（IDSS 最高等级发版门禁专家组复审）从正常执行刷新为 systemError / interrupted，推荐选择 continue 或 reconnect。",
+		},
+		{
+			name:    "semicolon recommendation",
+			message: "线程 019f01ce-d4d3-7312-a726-c234bfb5a4f5（IDSS 最高等级发版门禁专家组复审）从正常执行刷新为 systemError / interrupted；推荐选择 continue 或 reconnect。",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dec := core.Decision{
+				ID:      "dec_recommendation_variant",
+				Title:   "Codex 巡检待决策：推荐动作验证",
+				Message: tt.message,
+				Choices: []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+			}
+			got := decodeRenderedCard(t, buildDecisionCard(dec))
+			markdownContents := decisionCardMarkdownContents(t, got)
+			if len(markdownContents) != 3 {
+				t.Fatalf("markdown element count = %d, want 3: %#v", len(markdownContents), markdownContents)
+			}
+			if markdownContents[2] != "**建议动作：** 选择 continue 或 reconnect。" {
+				t.Fatalf("recommendation variant suggestion markdown = %q, want suggestion line", markdownContents[2])
+			}
+		})
+	}
+}
+
+func TestBuildDecisionCardPreservesMojibakeInputWithoutGuessing(t *testing.T) {
+	title := "Codex 鏍煎紡楠岃瘉锛氶€楀彿寤鸿涓庣嚎绋嬫爣棰? `\n  --message"
+	message := "绾跨▼ 019f01ce-d4d3-7312-a726-c234bfb5a4f5锛圛DSS 鏈€楂樼瓑绾у彂鐗堥棬绂佷笓瀹剁粍澶嶅锛変粠姝ｅ父鎵ц鍒锋柊涓?systemError / interrupted銆傛渶鍚庤繘灞曚粛鏄巿鏉冩墽琛屼腑鐨勬湰鍦版不鐞嗗瀹★紝鏃?waitingOnApproval锛涙寜瑙勫垯涓嶈嚜鍔ㄧ户缁垨閲嶈繛锛屽缓璁€夋嫨 continue 鎴?reconnect銆?"
+	dec := core.Decision{
+		ID:      "dec_mojibake_boundary",
+		Title:   title,
+		Message: message,
+		Choices: []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+	}
+	got := decodeRenderedCard(t, buildDecisionCard(dec))
+
+	header := got["header"].(map[string]any)
+	headerTitle := header["title"].(map[string]any)
+	if headerTitle["content"] != title {
+		t.Fatalf("title = %q, want original mojibake input", headerTitle["content"])
+	}
+	markdownContents := decisionCardMarkdownContents(t, got)
+	if len(markdownContents) != 1 || markdownContents[0] != message {
+		t.Fatalf("markdown contents = %#v, want original mojibake message", markdownContents)
 	}
 }
 

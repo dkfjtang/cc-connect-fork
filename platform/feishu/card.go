@@ -6,13 +6,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strings"
+	"unicode"
 
 	"github.com/chenhg5/cc-connect/core"
 	lark "github.com/larksuite/oapi-sdk-go/v3"
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 	larkim "github.com/larksuite/oapi-sdk-go/v3/service/im/v1"
 )
+
+var naturalDecisionThreadUUIDPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}`)
 
 func plainText(content string) map[string]any {
 	return map[string]any{"tag": "plain_text", "content": content}
@@ -223,33 +227,62 @@ func splitNaturalDecisionThread(line string) (string, string, bool) {
 		if rest == "" {
 			return "", "", false
 		}
-		parts := strings.Fields(rest)
-		if len(parts) == 0 {
-			return "", "", false
+		if threadID := naturalDecisionThreadUUIDPattern.FindString(rest); threadID != "" {
+			detail := strings.TrimSpace(strings.TrimPrefix(rest, threadID))
+			return threadID, detail, detail != ""
 		}
-		threadID := strings.TrimSpace(parts[0])
+		threadEnd := len(rest)
+		for idx, r := range rest {
+			if unicode.IsSpace(r) || r == '（' || r == '(' {
+				threadEnd = idx
+				break
+			}
+		}
+		threadID := strings.TrimSpace(rest[:threadEnd])
 		if threadID == "" {
 			return "", "", false
 		}
-		detail := strings.TrimSpace(strings.TrimPrefix(rest, threadID))
+		detail := strings.TrimSpace(rest[threadEnd:])
 		return threadID, detail, detail != ""
 	}
 	return "", "", false
 }
 
 func splitNaturalDecisionSuggestion(detail string) (string, string) {
+	before, after, ok := splitNaturalDecisionSuggestionMarker(detail)
+	if !ok {
+		return strings.TrimSpace(detail), ""
+	}
+	return before, after
+}
+
+func splitNaturalDecisionSuggestionMarker(detail string) (string, string, bool) {
+	type suggestionMarker struct {
+		marker    string
+		separator string
+	}
+	markers := []suggestionMarker{
+		{marker: "。建议", separator: "。"},
+		{marker: "。推荐", separator: "。"},
+		{marker: "，建议", separator: "，"},
+		{marker: "，推荐", separator: "，"},
+		{marker: "；建议", separator: "；"},
+		{marker: "；推荐", separator: "；"},
+	}
 	bestIdx := -1
-	for _, marker := range []string{"。建议", "。推荐"} {
-		if idx := strings.Index(detail, marker); idx >= 0 && (bestIdx < 0 || idx < bestIdx) {
+	var best suggestionMarker
+	for _, marker := range markers {
+		if idx := strings.Index(detail, marker.marker); idx >= 0 && (bestIdx < 0 || idx < bestIdx) {
 			bestIdx = idx
+			best = marker
 		}
 	}
 	if bestIdx < 0 {
-		return strings.TrimSpace(detail), ""
+		return "", "", false
 	}
-	before := strings.TrimSpace(detail[:bestIdx+len("。")])
-	after := strings.TrimSpace(detail[bestIdx+len("。"):])
-	return before, after
+	before := strings.TrimSpace(detail[:bestIdx+len(best.separator)])
+	after := strings.TrimSpace(detail[bestIdx+len(best.separator):])
+	return before, after, true
 }
 
 func naturalDecisionDetailLabel(detail string) string {
