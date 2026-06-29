@@ -288,6 +288,114 @@ func TestBuildDecisionCardFormatsWatchdogMessageFieldsAsSeparateMarkdownElements
 	}
 }
 
+func TestBuildDecisionCardFormatsNaturalDecisionMessageIntoReadableLines(t *testing.T) {
+	dec := core.Decision{
+		ID:      "dec_natural",
+		Title:   "Codex 巡检待决策：IDSS 生产/主线对齐风险",
+		Message: "目标线程 019f01ce-d4d3-7312-a726-c234bfb5a4f5 在 08:16 复核仍显示 origin/main 与主仓 dirty/stale 未变化：dirty_count=311、本地 main 落后 86、生产对齐风险未确认解除。建议选择 continue 让目标线程继续按只读治理巡检/证据路线推进；不要执行生产、远端、主干写入或发布动作。",
+		Choices: []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+	}
+	got := decodeRenderedCard(t, buildDecisionCard(dec))
+
+	elements := got["elements"].([]any)
+	form := elements[0].(map[string]any)
+	formElements := form["elements"].([]any)
+	var markdownContents []string
+	for _, raw := range formElements {
+		elem, ok := raw.(map[string]any)
+		if ok && elem["tag"] == "markdown" {
+			content, _ := elem["content"].(string)
+			markdownContents = append(markdownContents, content)
+		}
+	}
+	wantContents := []string{
+		"**线程：** 019f01ce-d4d3-7312-a726-c234bfb5a4f5",
+		"**最近进展：** 在 08:16 复核仍显示 origin/main 与主仓 dirty/stale 未变化：dirty_count=311、本地 main 落后 86、生产对齐风险未确认解除。",
+		"**建议动作：** 选择 continue 让目标线程继续按只读治理巡检/证据路线推进",
+		"**注意事项：** 不要执行生产、远端、主干写入或发布动作。",
+	}
+	if len(markdownContents) != len(wantContents) {
+		t.Fatalf("markdown element count = %d, want %d: %#v", len(markdownContents), len(wantContents), markdownContents)
+	}
+	for i, want := range wantContents {
+		if markdownContents[i] != want {
+			t.Fatalf("markdown content %d = %q, want %q", i, markdownContents[i], want)
+		}
+	}
+}
+
+func TestBuildDecisionCardFormatsOwnerDecisionPromptLikeLabeledCard(t *testing.T) {
+	dec := core.Decision{
+		ID:      "dec_owner",
+		Title:   "Codex 巡检：IDSS dirty-main sequence-5 owner decision",
+		Message: "线程 019f02ef 仍需要 owner 二选一裁决后才可触碰主 checkout。推荐 continue 后回复推荐 token：APPROVE-IDSS-CURRENT-311-POST-YUNWMS-EVIDENCE-KEEP-HEAD-DISCARD-DIRTY-2-PATHS；备注为 STAGE-WORKTREE-2-PATHS。",
+		Choices: []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+	}
+	got := decodeRenderedCard(t, buildDecisionCard(dec))
+
+	elements := got["elements"].([]any)
+	form := elements[0].(map[string]any)
+	formElements := form["elements"].([]any)
+	var markdownContents []string
+	for _, raw := range formElements {
+		elem, ok := raw.(map[string]any)
+		if ok && elem["tag"] == "markdown" {
+			content, _ := elem["content"].(string)
+			markdownContents = append(markdownContents, content)
+		}
+	}
+	wantContents := []string{
+		"**线程：** 019f02ef",
+		"**需要用户决策：** 仍需要 owner 二选一裁决后才可触碰主 checkout。",
+		"**建议动作：** continue 后回复推荐 token：APPROVE-IDSS-CURRENT-311-POST-YUNWMS-EVIDENCE-KEEP-HEAD-DISCARD-DIRTY-2-PATHS",
+		"**备注：** STAGE-WORKTREE-2-PATHS。",
+	}
+	if len(markdownContents) != len(wantContents) {
+		t.Fatalf("markdown element count = %d, want %d: %#v", len(markdownContents), len(wantContents), markdownContents)
+	}
+	for i, want := range wantContents {
+		if markdownContents[i] != want {
+			t.Fatalf("markdown content %d = %q, want %q", i, markdownContents[i], want)
+		}
+	}
+}
+
+func TestBuildDecisionCardFormatsLegacyNaturalDecisionMessageIntoReadableLines(t *testing.T) {
+	dec := core.Decision{
+		ID:      "dec_legacy_natural",
+		Title:   "Codex巡检：补货发布需要生产脚本版本边界审批",
+		Message: "线程 019f03d9 已到明确阻塞点：release candidate 本地门禁通过、生产只读基线稳定，但继续 DryRun/正式发布前需要你明确批准 scripts/prod_one_click_deploy.ps1 中 2.1.32 -> 2.1.39 的版本常量 bump。建议 continue 表示批准目标线程按当前方案继续；pause 暂停；revise 输入调整指令；ignore/remind_later 冷却；reconnect 仅唤醒汇报。",
+		Choices: []string{"continue", "pause", "revise", "ignore", "remind_later", "reconnect"},
+	}
+	got := decodeRenderedCard(t, buildDecisionCard(dec))
+
+	elements := got["elements"].([]any)
+	form := elements[0].(map[string]any)
+	formElements := form["elements"].([]any)
+	var markdownContents []string
+	for _, raw := range formElements {
+		elem, ok := raw.(map[string]any)
+		if ok && elem["tag"] == "markdown" {
+			content, _ := elem["content"].(string)
+			markdownContents = append(markdownContents, content)
+		}
+	}
+	wantContents := []string{
+		"**线程：** 019f03d9",
+		"**最近进展：** 已到明确阻塞点：release candidate 本地门禁通过、生产只读基线稳定，但继续 DryRun/正式发布前需要你明确批准 scripts/prod_one_click_deploy.ps1 中 2.1.32 -> 2.1.39 的版本常量 bump。",
+		"**建议动作：** continue 表示批准目标线程按当前方案继续",
+		"**其他选项：** pause 暂停；revise 输入调整指令；ignore/remind_later 冷却；reconnect 仅唤醒汇报。",
+	}
+	if len(markdownContents) != len(wantContents) {
+		t.Fatalf("markdown element count = %d, want %d: %#v", len(markdownContents), len(wantContents), markdownContents)
+	}
+	for i, want := range wantContents {
+		if markdownContents[i] != want {
+			t.Fatalf("markdown content %d = %q, want %q", i, markdownContents[i], want)
+		}
+	}
+}
+
 func TestBuildDecisionCardDoesNotTreatWindowsPathBackslashNAsNewline(t *testing.T) {
 	dec := core.Decision{
 		ID:      "dec_path",

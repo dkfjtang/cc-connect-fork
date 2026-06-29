@@ -100,7 +100,9 @@ func formatDecisionMessageMarkdownLines(message string) []string {
 		if line == "" {
 			continue
 		}
-		out = append(out, formatDecisionMessageLine(line))
+		for _, readableLine := range splitNaturalDecisionMessageLine(line) {
+			out = append(out, formatDecisionMessageLine(readableLine))
+		}
 	}
 	return out
 }
@@ -149,6 +151,174 @@ func formatDecisionMessageLine(line string) string {
 	return line
 }
 
+func splitNaturalDecisionMessageLine(line string) []string {
+	line = strings.TrimSpace(line)
+	if line == "" || hasDecisionMessageLabelPrefix(line) {
+		return []string{line}
+	}
+	if fields := formatNaturalDecisionMessageFields(line); len(fields) > 0 {
+		return fields
+	}
+
+	lines := []string{line}
+	if idx := strings.Index(line, "。建议"); idx >= 0 {
+		prefix := strings.TrimSpace(line[:idx+len("。")])
+		suggestion := strings.TrimSpace(line[idx+len("。"):])
+		lines = lines[:0]
+		if prefix != "" {
+			lines = append(lines, prefix)
+		}
+		if suggestion != "" {
+			lines = append(lines, suggestion)
+		}
+	}
+
+	out := make([]string, 0, len(lines))
+	for _, candidate := range lines {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if strings.HasPrefix(candidate, "建议") {
+			for _, part := range splitDecisionSuggestionParts(candidate) {
+				part = strings.TrimSpace(part)
+				if part != "" {
+					out = append(out, part)
+				}
+			}
+			continue
+		}
+		out = append(out, candidate)
+	}
+	if len(out) == 0 {
+		return []string{line}
+	}
+	return out
+}
+
+func formatNaturalDecisionMessageFields(line string) []string {
+	threadID, detail, ok := splitNaturalDecisionThread(line)
+	if !ok {
+		return nil
+	}
+
+	detail, suggestion := splitNaturalDecisionSuggestion(detail)
+	out := []string{"线程： " + threadID}
+	if detail != "" {
+		out = append(out, naturalDecisionDetailLabel(detail)+" "+detail)
+	}
+	out = append(out, formatNaturalDecisionSuggestionFields(suggestion)...)
+	if len(out) <= 1 {
+		return nil
+	}
+	return out
+}
+
+func splitNaturalDecisionThread(line string) (string, string, bool) {
+	for _, prefix := range []string{"目标线程 ", "线程 "} {
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		if rest == "" {
+			return "", "", false
+		}
+		parts := strings.Fields(rest)
+		if len(parts) == 0 {
+			return "", "", false
+		}
+		threadID := strings.TrimSpace(parts[0])
+		if threadID == "" {
+			return "", "", false
+		}
+		detail := strings.TrimSpace(strings.TrimPrefix(rest, threadID))
+		return threadID, detail, detail != ""
+	}
+	return "", "", false
+}
+
+func splitNaturalDecisionSuggestion(detail string) (string, string) {
+	bestIdx := -1
+	for _, marker := range []string{"。建议", "。推荐"} {
+		if idx := strings.Index(detail, marker); idx >= 0 && (bestIdx < 0 || idx < bestIdx) {
+			bestIdx = idx
+		}
+	}
+	if bestIdx < 0 {
+		return strings.TrimSpace(detail), ""
+	}
+	before := strings.TrimSpace(detail[:bestIdx+len("。")])
+	after := strings.TrimSpace(detail[bestIdx+len("。"):])
+	return before, after
+}
+
+func naturalDecisionDetailLabel(detail string) string {
+	if strings.HasPrefix(detail, "仍需要") || strings.Contains(detail, "需要 owner") || strings.Contains(detail, "需要用户") {
+		return "需要用户决策："
+	}
+	return "最近进展："
+}
+
+func formatNaturalDecisionSuggestionFields(suggestion string) []string {
+	suggestion = strings.TrimSpace(suggestion)
+	if suggestion == "" {
+		return nil
+	}
+	suggestion = strings.TrimSpace(strings.TrimPrefix(suggestion, "建议"))
+	suggestion = strings.TrimSpace(strings.TrimPrefix(suggestion, "推荐"))
+	if suggestion == "" {
+		return nil
+	}
+
+	parts := splitDecisionSuggestionParts(suggestion)
+	if len(parts) == 0 {
+		return []string{"建议动作： " + suggestion}
+	}
+
+	out := make([]string, 0, len(parts))
+	otherOptions := make([]string, 0)
+	for i, raw := range parts {
+		part := strings.TrimSpace(raw)
+		if part == "" {
+			continue
+		}
+		switch {
+		case i == 0:
+			out = append(out, "建议动作： "+part)
+		case strings.HasPrefix(part, "备注为"):
+			out = append(out, "备注： "+strings.TrimSpace(strings.TrimPrefix(part, "备注为")))
+		case strings.HasPrefix(part, "备注："):
+			out = append(out, "备注： "+strings.TrimSpace(strings.TrimPrefix(part, "备注：")))
+		case strings.HasPrefix(part, "不要") || strings.HasPrefix(part, "不得") || strings.HasPrefix(part, "禁止"):
+			out = append(out, "注意事项： "+part)
+		default:
+			otherOptions = append(otherOptions, part)
+		}
+	}
+	if len(otherOptions) > 0 {
+		out = append(out, "其他选项： "+strings.Join(otherOptions, "；"))
+	}
+	if len(out) == 0 {
+		return []string{"建议动作： " + suggestion}
+	}
+	return out
+}
+
+func splitDecisionSuggestionParts(line string) []string {
+	return strings.FieldsFunc(line, func(r rune) bool {
+		return r == '；' || r == ';'
+	})
+}
+
+func hasDecisionMessageLabelPrefix(line string) bool {
+	for _, label := range decisionMessageLabels() {
+		if strings.HasPrefix(line, label) {
+			return true
+		}
+	}
+	return false
+}
+
 func decisionMessageLabels() []string {
 	return []string{
 		"线程：",
@@ -158,6 +328,9 @@ func decisionMessageLabels() []string {
 		"需要用户决策：",
 		"需要用户决策的问题：",
 		"建议动作：",
+		"注意事项：",
+		"其他选项：",
+		"备注：",
 	}
 }
 
